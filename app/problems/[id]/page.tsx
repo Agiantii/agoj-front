@@ -9,13 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Play, RotateCcw, Send, Clock, MemoryStick, CheckCircle, XCircle, Plus, Loader2 } from "lucide-react"
 import { getProblemDetail, submitProblem, getSolutionsByProblemId, addSolution, getSubmissionStatus } from "@/lib/api"
+import { SUBMISSION_STATUS, IN_PROGRESS_STATUSES } from "@/components/const/submissionStatus"
 import { useToast } from "@/components/ui/use-toast"
+import ReactMarkdown from "react-markdown"
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
+import "katex/dist/katex.min.css"
+import dynamic from "next/dynamic"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 
 export default function ProblemDetailPage({ params }: { params: { id: string } }) {
   const { toast } = useToast()
-  const [language, setLanguage] = useState("python")
+  const [language, setLanguage] = useState("cpp")
   const [code, setCode] = useState("")
   const [testResults, setTestResults] = useState<any[]>([])
   const [isRunning, setIsRunning] = useState(false)
@@ -27,18 +33,24 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
   const [submissionStatus, setSubmissionStatus] = useState<string>("")
   const [submissionResult, setSubmissionResult] = useState<any>(null)
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [activeTab, setActiveTab] = useState("description")
+  const [solutionsLoaded, setSolutionsLoaded] = useState(false)
+  const [aiAdvice, setAiAdvice] = useState("")
+  const [isChatting, setIsChatting] = useState(false)
+  const [showAdvice, setShowAdvice] = useState(false)
+  const [isAccepted, setIsAccepted] = useState(false)
+  const adviceAbortRef = useRef<AbortController | null>(null)
 
+  const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false }) as any
   useEffect(() => {
     const fetchProblemDetail = async () => {
       try {
         const res = await getProblemDetail(parseInt(params.id))
         setProblem(res.data)
         // 设置默认代码模板
-        setCode(res.data.template || "// 在这里编写你的代码")
+        // setCode(res.data.template || "// 在这里编写你的代码")
 
-        // 获取题解
-        const solutionsRes = await getSolutionsByProblemId(parseInt(params.id), 1, 10)
-        setSolutions(solutionsRes.data || [])
+        // 题解改为懒加载：首次进入不请求
       } catch (error: any) {
         toast({
           variant: "destructive",
@@ -51,14 +63,65 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
     fetchProblemDetail()
   }, [params.id, toast])
 
+  const fetchSolutions = async () => {
+    try {
+      const solutionsRes = await getSolutionsByProblemId(parseInt(params.id), 1, 10)
+      setSolutions(solutionsRes.data || [])
+      setSolutionsLoaded(true)
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "获取题解失败",
+        description: error.message || "网络错误",
+      })
+    }
+  }
+
   // 清理轮询
   useEffect(() => {
     return () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current)
       }
+      if (adviceAbortRef.current) {
+        adviceAbortRef.current.abort()
+        adviceAbortRef.current = null
+      }
     }
   }, [])
+
+  const streamCompileAdvice = async (prompt: string) => {
+    try {
+      const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:9090/api"
+      const controller = new AbortController()
+      adviceAbortRef.current = controller
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : undefined
+      const res = await fetch(`${base}/chat/stream/simple?query=${encodeURIComponent(prompt)}`, {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        signal: controller.signal,
+      })
+      if (!res.body) {
+        setAiAdvice("流式连接失败")
+        return
+      }
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder("utf-8")
+      setAiAdvice("")
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        setAiAdvice(prev => prev + chunk)
+      }
+    } catch (e) {
+      if ((e as any)?.name === "AbortError") return
+      setAiAdvice("获取建议失败，请稍后重试")
+    } finally {
+      setIsChatting(false)
+      adviceAbortRef.current = null
+    }
+  }
 
   const getDifficultyColor = (difficulty: number) => {
     switch (difficulty) {
@@ -95,8 +158,8 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
       setSubmissionStatus(submission.status)
       setSubmissionResult(submission)
 
-      // 如果状态不是待处理，停止轮询
-      if (submission.status !== "PENDING" && submission.status !== "TESTING") {
+      // 如果状态不是进行中，停止轮询
+      if (!IN_PROGRESS_STATUSES.has(submission.status)) {
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current)
           pollingIntervalRef.current = null
@@ -104,7 +167,8 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
         setIsSubmitting(false)
 
         // 显示结果
-        if (submission.status === "ACCEPTED") {
+        if (submission.status === SUBMISSION_STATUS.ACCEPTED) {
+          setIsAccepted(true)
           toast({
             title: "提交成功",
             description: "恭喜！你的代码通过了所有测试用例",
@@ -115,6 +179,18 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
             title: "提交失败",
             description: submission.failMsg || "代码未通过测试",
           })
+        }
+
+        // 编译错误时，调用聊天建议（流式）
+        if (
+          submission.status === SUBMISSION_STATUS.COMPILE_FAIL ||
+          submission.status === SUBMISSION_STATUS.COMPILATION_ERROR
+        ) {
+          setIsChatting(true)
+          setShowAdvice(true)
+          const prompt = `debug my code: ${code} error: ${submission.failMsg || "null"}, return in Chinese`.
+            toString()
+          await streamCompileAdvice(prompt)
         }
       }
     } catch (error: any) {
@@ -155,13 +231,15 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
       // 获取提交ID并开始轮询
       const submissionId = String(res.data)
       if (submissionId) {
-        // 立即开始轮询
-        pollSubmissionResult(submissionId)
+        // 延迟2秒后开始轮询
+        setTimeout(() => {
+          pollSubmissionResult(submissionId)
+        }, 5500)
         
-        // 设置定时轮询
+        // 每2秒轮询一次
         pollingIntervalRef.current = setInterval(() => {
           pollSubmissionResult(submissionId)
-        }, 1000)
+        }, 5000)
       }
     } catch (error: any) {
       toast({
@@ -206,13 +284,16 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
           description: "正在判题中，请稍候...",
         })
 
-        // 立即开始轮询
-        pollSubmissionResult(submissionId)
         
-        // 设置定时轮询
-        pollingIntervalRef.current = setInterval(() => {
-          pollSubmissionResult(submissionId)
-        }, 1000)
+        // 延迟2秒后开始轮询
+        setTimeout(() => {
+          // 每2秒轮询一次
+          pollingIntervalRef.current = setInterval(() => {
+            pollSubmissionResult(submissionId)
+          }, 2000)
+        }, 1200)
+        
+
       }
     } catch (error: any) {
       toast({
@@ -240,8 +321,13 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
           <div className="p-6">
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-4">
-                <h1 className="text-2xl font-bold">
-                  {problem.id}. {problem.title}
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  <span>{problem.id}. {problem.title}</span>
+                  {isAccepted && (
+                    <span className="inline-flex items-center gap-1 text-green-400 text-sm">
+                      <CheckCircle className="h-4 w-4" /> 已通过
+                    </span>
+                  )}
                 </h1>
                 <Badge className={getDifficultyColor(problem.difficulty)}>{getDifficultyText(problem.difficulty)}</Badge>
               </div>
@@ -258,7 +344,12 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
               </div>
             </div>
 
-            <Tabs defaultValue="description" className="w-full">
+            <Tabs value={activeTab} onValueChange={(v) => {
+              setActiveTab(v)
+              if (v === "solutions" && !solutionsLoaded) {
+                fetchSolutions()
+              }
+            }} className="w-full">
               <TabsList className="grid w-full grid-cols-2 bg-gray-800">
                 <TabsTrigger value="description">题目描述</TabsTrigger>
                 <TabsTrigger value="solutions">题解</TabsTrigger>
@@ -268,7 +359,9 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                 <Card className="bg-gray-900 border-gray-800">
                   <CardContent className="pt-6">
                     <div className="prose prose-invert max-w-none">
-                      <p className="text-gray-300 leading-relaxed whitespace-pre-line">{problem.description}</p>
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {problem.description || ""}
+                      </ReactMarkdown>
                     </div>
                   </CardContent>
                 </Card>
@@ -424,9 +517,9 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="cpp">C++</SelectItem>
                   <SelectItem value="python">Python</SelectItem>
                   <SelectItem value="java">Java</SelectItem>
-                  <SelectItem value="cpp">C++</SelectItem>
                   <SelectItem value="javascript">JavaScript</SelectItem>
                 </SelectContent>
               </Select>
@@ -440,12 +533,18 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
           </div>
 
           <div className="flex-1 p-4">
-            <Textarea
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              className="w-full h-full resize-none bg-gray-900 border-gray-700 font-mono text-sm"
-              placeholder="在这里编写你的代码..."
-            />
+            <div className="h-full border border-gray-700 rounded">
+              <MonacoEditor
+                height="100%"
+                defaultLanguage={language}
+                language={language}
+                theme="vs-dark"
+                value={code}
+                options={{ fontSize: 14, minimap: { enabled: false }, wordWrap: "on" }}
+                onChange={(value: string | undefined) => setCode(value || "")
+                }
+              />
+            </div>
           </div>
 
           {/* Submission Results */}
@@ -455,7 +554,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
               {submissionResult && (
                 <div className="bg-gray-800 p-3 rounded-lg mb-3">
                   <div className="flex items-center gap-2 mb-2">
-                    {submissionResult.status === "ACCEPTED" ? (
+                    {submissionResult.status === SUBMISSION_STATUS.ACCEPTED ? (
                       <CheckCircle className="h-4 w-4 text-green-500" />
                     ) : (
                       <XCircle className="h-4 w-4 text-red-500" />
@@ -482,6 +581,19 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                         错误信息: {submissionResult.failMsg}
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+              {showAdvice && (
+                <div className="bg-gray-800 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm font-medium">编译错误建议</span>
+                    {isChatting && <Loader2 className="h-3 w-3 animate-spin" />}
+                  </div>
+                  <div className="prose prose-invert max-w-none text-xs text-gray-300">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {aiAdvice || "正在生成建议..."}
+                    </ReactMarkdown>
                   </div>
                 </div>
               )}
