@@ -1,8 +1,11 @@
+"use client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Clock, Trophy, BookOpen, TrendingUp } from "lucide-react"
 import Link from "next/link"
+import { useEffect, useState } from "react"
+import { searchProblems, searchSolutions } from "@/lib/api"
 
 export default function HomePage() {
   const recentContests = [
@@ -24,32 +27,23 @@ export default function HomePage() {
     },
   ]
 
-  const latestSolutions = [
-    {
-      id: 1,
-      title: "两数之和",
-      author: "coding_master",
-      likes: 234,
-      difficulty: "简单",
-      language: "Python",
-    },
-    {
-      id: 2,
-      title: "最长回文子串",
-      author: "algorithm_pro",
-      likes: 189,
-      difficulty: "中等",
-      language: "Java",
-    },
-    {
-      id: 3,
-      title: "合并K个升序链表",
-      author: "data_structure_fan",
-      likes: 156,
-      difficulty: "困难",
-      language: "C++",
-    },
-  ]
+  const [recommendedProblems, setRecommendedProblems] = useState<any[]>([])
+  const [latestSolutions, setLatestSolutions] = useState<any[]>([])
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [pRes, sRes] = await Promise.all([
+          searchProblems({ pageNum: 1, pageSize: 6 }),
+          searchSolutions({ visible: 1, pageNum: 1, pageSize: 6 } as any),
+        ])
+        console.log(pRes,sRes);
+        setRecommendedProblems(pRes.data?.list || pRes.data || [])
+        setLatestSolutions(sRes.data?.list || sRes.data || [])
+      } catch {}
+    }
+    load()
+  }, [])
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -143,17 +137,23 @@ export default function HomePage() {
               <CardDescription className="text-gray-400">学习他人的优秀解法，提升编程思维</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {latestSolutions.map((solution) => (
+              {latestSolutions.map((solution: any) => (
                 <div key={solution.id} className="p-4 rounded-lg bg-gray-800 border border-gray-700">
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold text-gray-100">{solution.title}</h3>
-                    <Badge className={getDifficultyColor(solution.difficulty)}>{solution.difficulty}</Badge>
+                    <h3 className="font-semibold text-gray-100">{solution.title || solution.problemTitle || "题解"}</h3>
+                    {solution.difficulty && (
+                      <Badge className={getDifficultyColor(solution.difficulty)}>{solution.difficulty}</Badge>
+                    )}
                   </div>
                   <div className="flex items-center justify-between text-sm text-gray-400">
-                    <span>by {solution.author}</span>
+                    <span>by {solution.username || solution.author || solution.userName || "匿名"}</span>
                     <div className="flex items-center gap-3">
-                      <span className="bg-gray-700 px-2 py-1 rounded text-xs">{solution.language}</span>
-                      <span className="flex items-center gap-1">👍 {solution.likes}</span>
+                      {solution.language && (
+                        <span className="bg-gray-700 px-2 py-1 rounded text-xs">{solution.language}</span>
+                      )}
+                      {typeof solution.likes !== "undefined" || typeof solution.likeCount !== "undefined" ? (
+                        <span className="flex items-center gap-1">👍 {solution.likes ?? solution.likeCount}</span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -163,6 +163,44 @@ export default function HomePage() {
                   查看更多题解 →
                 </Button>
               </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recommended Problems */}
+        <div className="mt-8">
+          <Card className="bg-gray-900 border-gray-800">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-gray-100">
+                <BookOpen className="h-5 w-5 text-blue-500" />
+                推荐题目
+              </CardTitle>
+              <CardDescription className="text-gray-400">为你推荐的热门和优质题目</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {recommendedProblems.map((p: any) => (
+                <Link key={p.id} href={`/problems/${p.id}`}>
+                  <div className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold text-gray-100 hover:text-blue-400 transition-colors">{p.id}. {p.title}</h3>
+                        {(p.tags || []).length > 0 && (
+                          <div className="flex items-center gap-2 mt-1">
+                            {(p.tags || []).map((tag: any) => (
+                              <Badge key={tag?.name || tag} variant="secondary" className="text-xs bg-gray-700 text-gray-300">
+                                {tag?.name || tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <Badge className={getDifficultyColor(p.difficulty === 1 ? "简单" : p.difficulty === 2 ? "中等" : "困难")}>
+                        {p.difficulty === 1 ? "简单" : p.difficulty === 2 ? "中等" : "困难"}
+                      </Badge>
+                    </div>
+                  </div>
+                </Link>
+              ))}
             </CardContent>
           </Card>
         </div>

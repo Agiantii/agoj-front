@@ -1,136 +1,96 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { MessageCircle, Send, Plus, Trash2, Bot, User } from "lucide-react"
+import { MessageCircle, Plus, Trash2, Send } from "lucide-react"
+import { newChat, getChatHistory } from "@/lib/api"
+import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
-// import "katex/dist/katex.min.css"
-
-interface Message {
-  id: string
-  content: string
-  role: "user" | "assistant"
-  timestamp: Date
-}
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
+import "katex/dist/katex.min.css"
 
 interface ChatSession {
   id: string
   title: string
-  messages: Message[]
   createdAt: Date
 }
 
 export default function ChatPage() {
-  const [sessions, setSessions] = useState<ChatSession[]>([
-    {
-      id: "1",
-      title: "算法学习讨论",
-      messages: [
-        {
-          id: "1",
-          content: "你好！我想学习动态规划，有什么建议吗？",
-          role: "user",
-          timestamp: new Date(),
-        },
-        {
-          id: "2",
-          content:
-            "动态规划是一个很重要的算法思想！建议你从以下几个方面开始学习：\n\n1. **理解基本概念**：动态规划是通过把原问题分解为相对简单的子问题的方式求解复杂问题的方法\n\n2. **掌握解题步骤**：\n   - 定义状态\n   - 找出状态转移方程\n   - 确定初始条件和边界情况\n   - 确定计算顺序\n\n3. **经典题目练习**：\n   - 斐波那契数列\n   - 爬楼梯问题\n   - 最长公共子序列\n   - 背包问题\n\n你想从哪个具体问题开始呢？",
-          role: "assistant",
-          timestamp: new Date(),
-        },
-      ],
-      createdAt: new Date(),
-    },
-  ])
-
-  const [currentSessionId, setCurrentSessionId] = useState<string>("1")
+  const router = useRouter()
+  const [sessions, setSessions] = useState<ChatSession[]>([])
   const [inputMessage, setInputMessage] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const userIdRef = useRef<number | null>(null)
 
-  const currentSession = sessions.find((s) => s.id === currentSessionId)
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
+  // 初始化加载会话列表
   useEffect(() => {
-    scrollToBottom()
-  }, [currentSession?.messages])
-
-  const createNewSession = () => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: "新对话",
-      messages: [],
-      createdAt: new Date(),
-    }
-    setSessions((prev) => [newSession, ...prev])
-    setCurrentSessionId(newSession.id)
-  }
-
-  const deleteSession = (sessionId: string) => {
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId))
-    if (currentSessionId === sessionId) {
-      const remainingSessions = sessions.filter((s) => s.id !== sessionId)
-      setCurrentSessionId(remainingSessions[0]?.id || "")
-    }
-  }
-
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || !currentSession) return
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: inputMessage,
-      role: "user",
-      timestamp: new Date(),
-    }
-
-    // 更新当前会话
-    setSessions((prev) =>
-      prev.map((session) =>
-        session.id === currentSessionId
-          ? {
-              ...session,
-              messages: [...session.messages, userMessage],
-              title: session.messages.length === 0 ? inputMessage.slice(0, 20) + "..." : session.title,
-            }
-          : session,
-      ),
-    )
-
-    setInputMessage("")
-    setIsLoading(true)
-
-    // 模拟AI回复
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: `这是一个模拟的AI回复。你问的是："${inputMessage}"。\n\n在实际应用中，这里会调用真实的AI API来生成回复。你可以继续提问关于算法、数据结构或编程相关的问题。`,
-        role: "assistant",
-        timestamp: new Date(),
+    const init = async () => {
+      try {
+        const userIdStr = localStorage.getItem("userId")
+        if (!userIdStr) return
+        userIdRef.current = parseInt(userIdStr)
+        const res = await getChatHistory(userIdRef.current)
+        const list = res?.data || []
+        const mapped: ChatSession[] = (Array.isArray(list) ? list : []).map((it: any) => ({
+          id: String(it.id ?? it.chatId ?? it.sessionId ?? Date.now()),
+          title: it.title || "新对话",
+          createdAt: new Date(it.createTime || Date.now()),
+        }))
+        setSessions(mapped)
+      } catch (e) {
+        console.error("加载聊天历史失败:", e)
       }
+    }
+    init()
+  }, [])
 
-      setSessions((prev) =>
-        prev.map((session) =>
-          session.id === currentSessionId ? { ...session, messages: [...session.messages, assistantMessage] } : session,
-        ),
-      )
+  const createNewSession = async () => {
+    try {
+      const userId = userIdRef.current
+      if (!userId) throw new Error("未登录")
+      const res = await newChat(userId)
+      const id = String(res?.data?.id ?? Date.now())
+      const title = res?.data?.title || "新对话"
+      const newSession: ChatSession = { id, title, createdAt: new Date() }
+      setSessions((prev) => [newSession, ...prev])
+      router.push(`/chat/${newSession.id}`)
+      return newSession.id
+    } catch (error) {
+      console.error("创建新会话失败:", error)
+    }
+  }
+
+  const deleteSession = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+    // TODO: 调用删除接口
+  }
+
+  const startQuickChat = async () => {
+    if (!inputMessage.trim()) return
+    
+    setIsLoading(true)
+    try {
+      // 创建新会话并立即发送消息
+      const sessionId = await createNewSession()
+      if (sessionId) {
+        // 跳转到新会话页面，并传递初始消息
+        router.push(`/chat/${sessionId}?message=${encodeURIComponent(inputMessage)}`)
+      }
+    } finally {
       setIsLoading(false)
-    }, 1000)
+      setInputMessage("")
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      startQuickChat()
     }
   }
 
@@ -151,24 +111,23 @@ export default function ChatPage() {
               {sessions.map((session) => (
                 <div
                   key={session.id}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors group ${
-                    currentSessionId === session.id ? "bg-gray-800 border border-gray-700" : "hover:bg-gray-800"
-                  }`}
-                  onClick={() => setCurrentSessionId(session.id)}
+                  className="p-3 rounded-lg cursor-pointer transition-colors group hover:bg-gray-800"
+                  onClick={() => {
+                    router.push(`/chat/${session.id}`)
+                  }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-medium text-gray-200 truncate">{session.title}</h3>
-                      <p className="text-xs text-gray-400 mt-1">{session.messages.length} 条消息</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {session.createdAt.toLocaleDateString()}
+                      </p>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteSession(session.id)
-                      }}
+                      onClick={(e) => deleteSession(session.id, e)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -179,113 +138,71 @@ export default function ChatPage() {
           </ScrollArea>
         </div>
 
-        {/* Right Panel - Chat Interface */}
+        {/* Right Panel - Welcome Interface */}
         <div className="flex-1 flex flex-col">
-          {currentSession ? (
-            <>
-              {/* Chat Header */}
-              <div className="p-4 border-b border-gray-800 bg-gray-900">
-                <div className="flex items-center gap-3">
-                  <MessageCircle className="h-5 w-5 text-blue-400" />
-                  <h1 className="text-lg font-semibold">{currentSession.title}</h1>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center max-w-2xl mx-auto px-4">
+              <MessageCircle className="h-16 w-16 text-blue-600 mx-auto mb-6" />
+              <h1 className="text-3xl font-bold text-gray-100 mb-4">AI 助手</h1>
+              <p className="text-gray-400 mb-8 text-lg">
+                欢迎使用智能编程助手！我可以帮助你解答编程问题、分析代码、提供算法建议等。
+              </p>
+              
+              {/* Quick Start Chat */}
+              <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
+                <h2 className="text-xl font-semibold text-gray-200 mb-4">快速开始聊天</h2>
+                <div className="flex gap-3">
+                  <Input
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="输入你的问题，支持 Markdown 和数学公式..."
+                    className="flex-1 bg-gray-800 border-gray-700 text-gray-100"
+                    disabled={isLoading}
+                  />
+                  <Button
+                    onClick={startQuickChat}
+                    disabled={!inputMessage.trim() || isLoading}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-sm text-gray-500 mt-2">
+                  按 Enter 键发送消息，或点击右侧按钮开始新对话
+                </p>
+                <div className="mt-4 text-xs text-gray-600">
+                  <p>支持功能：</p>
+                  <ul className="list-disc list-inside space-y-1 mt-2">
+                    <li>**Markdown** 文本格式</li>
+                    <li>LaTeX 数学公式：$E = mc^2$</li>
+                    <li>代码高亮和语法分析</li>
+                    <li>编程问题解答</li>
+                  </ul>
                 </div>
               </div>
 
-              {/* Messages */}
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4 max-w-4xl mx-auto">
-                  {currentSession.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      {message.role === "assistant" && (
-                        <Avatar className="h-8 w-8 bg-blue-600">
-                          <AvatarFallback>
-                            <Bot className="h-4 w-4" />
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-
-                      <div
-                        className={`max-w-[70%] rounded-lg p-4 ${
-                          message.role === "user" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-100"
-                        }`}
-                      >
-                        <div className="prose prose-invert max-w-none">
-                          <ReactMarkdown>{message.content}</ReactMarkdown>
-                        </div>
-                        <div className="text-xs opacity-70 mt-2">{message.timestamp.toLocaleTimeString()}</div>
-                      </div>
-
-                      {message.role === "user" && (
-                        <Avatar className="h-8 w-8 bg-gray-600">
-                          <AvatarFallback>
-                            <User className="h-4 w-4" />
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                    </div>
-                  ))}
-
-                  {isLoading && (
-                    <div className="flex gap-3 justify-start">
-                      <Avatar className="h-8 w-8 bg-blue-600">
-                        <AvatarFallback>
-                          <Bot className="h-4 w-4" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="bg-gray-800 rounded-lg p-4">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div
-                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "0.1s" }}
-                          ></div>
-                          <div
-                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "0.2s" }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={messagesEndRef} />
+              {/* Feature List */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                  <h3 className="font-semibold text-gray-200 mb-2">🤖 智能问答</h3>
+                  <p className="text-gray-400 text-sm">解答编程疑问，提供技术建议</p>
                 </div>
-              </ScrollArea>
-
-              {/* Input */}
-              <div className="p-4 border-t border-gray-800 bg-gray-900">
-                <div className="max-w-4xl mx-auto">
-                  <div className="flex gap-3">
-                    <Input
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      placeholder="输入你的问题..."
-                      className="flex-1 bg-gray-800 border-gray-700 text-gray-100"
-                      disabled={isLoading}
-                    />
-                    <Button
-                      onClick={sendMessage}
-                      disabled={!inputMessage.trim() || isLoading}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
+                <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                  <h3 className="font-semibold text-gray-200 mb-2">📝 代码分析</h3>
+                  <p className="text-gray-400 text-sm">分析代码问题，优化建议</p>
                 </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <MessageCircle className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-                <h2 className="text-xl font-semibold text-gray-400 mb-2">开始新对话</h2>
-                <p className="text-gray-500">点击"新建对话"开始与AI助手交流</p>
+                <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                  <h3 className="font-semibold text-gray-200 mb-2">🔧 调试帮助</h3>
+                  <p className="text-gray-400 text-sm">协助排查错误，解决编译问题</p>
+                </div>
+                <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                  <h3 className="font-semibold text-gray-200 mb-2">💡 算法建议</h3>
+                  <p className="text-gray-400 text-sm">提供算法思路，优化解决方案</p>
+                </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

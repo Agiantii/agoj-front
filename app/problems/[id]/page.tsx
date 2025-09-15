@@ -64,7 +64,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
         const res = await getProblemDetail(parseInt(params.id))
         setProblem(res.data)
         // 设置默认代码模板（若编辑器已挂载则直接写入）
-        const template = res.data.template || "// 在这里编写你的代码"
+        const template = "#include <iostream>\nusing namespace std;\nint main()\n{\n return 0;\n }"
         if (!initialCodeRef.current) {
           initialCodeRef.current = template
         }
@@ -218,7 +218,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
         ) {
           setIsChatting(true)
           setShowAdvice(true)
-          const prompt = `debug my code: ${code} error: ${submission.failMsg || "null"}, return in Chinese`.
+          const prompt = `debug my code: ${code} error: ${submission.failMsg || "null"}, return in Chinese!!!`.
             toString()
           await streamCompileAdvice(prompt)
         }

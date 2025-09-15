@@ -95,7 +95,7 @@ export const updateUser = (
   return request.put(`/user/${id}`, userData)
 }
 
-export const getUserById = (userId: string) => {
+export const getUserById = (userId: string | number) => {
   return request.get("/user/get", { params: { arg0: userId } })
 }
 
@@ -103,7 +103,7 @@ export const searchUsers = (keyword: string) => {
   return request.get("/user/search", { params: { arg0: keyword } })
 }
 
-export const deleteUser = (userId: number) => {
+export const deleteUser = (userId: string | number) => {
   return request.get("/user/delete", { params: { arg0: userId } })
 }
 
@@ -120,7 +120,7 @@ export const searchProblems = (params: {
   return request.get("/problem/search", { params })
 }
 
-export const getProblemDetail = (problemId: number) => {
+export const getProblemDetail = (problemId: string | number) => {
   return request.get("/problem/detail", { params: { problemId } })
 }
 
@@ -138,8 +138,8 @@ export const createProblem = (problemData: {
 }
 
 export const submitProblem = (submission: {
-  problemId: number
-  userId: number
+  problemId: string | number
+  userId: string | number
   language: string
   code: string
   status?: string
@@ -154,21 +154,21 @@ export const submitProblem = (submission: {
   return request.post("/problem/submit", submission)
 }
 
-export const getSubmissionCount = (problemId: number) => {
+export const getSubmissionCount = (problemId: string | number) => {
   return request.get("/problem/getSubmissionCount", { params: { problemId } })
 }
 
-export const getPassedCount = (problemId: number) => {
+export const getPassedCount = (problemId: string | number) => {
   return request.get("/problem/getPassedCount", { params: { problemId } })
 }
 
 // ==================== 题目测试用例相关接口 ====================
 
-export const getProblemCases = (problemId: number) => {
+export const getProblemCases = (problemId: string | number) => {
   return request.get("/problemCase/getProblemCases", { params: { problemId } })
 }
 
-export const uploadProblemCasesZip = (problemId: number, file: File) => {
+export const uploadProblemCasesZip = (problemId: string | number, file: File) => {
   const formData = new FormData()
   formData.append("file", file)
   return request.post("/problemCase/uploadZip", formData, {
@@ -208,17 +208,17 @@ export const searchSolutions = (params: {
   return request.get("/solution/search", { params })
 }
 
-export const getSolutionsByProblemId = (problemId: number, pageNum = 1, pageSize = 10) => {
+export const getSolutionsByProblemId = (problemId: string | number, pageNum = 1, pageSize = 10) => {
   return request.get("/solution/getByProblemId", {
     params: { problemId, pageNum, pageSize },
   })
 }
 
-export const approveSolution = (solutionId: number) => {
+export const approveSolution = (solutionId: string | number) => {
   return request.get("/solution/approve", { params: { solutionId } })
 }
 
-export const rejectSolution = (solutionId: number) => {
+export const rejectSolution = (solutionId: string | number) => {
   return request.get("/solution/reject", { params: { solutionId } })
 }
 
@@ -230,7 +230,7 @@ export const searchContests = (keyword: string, pageNum = 1, pageSize = 10) => {
   })
 }
 
-export const getContestProblems = (contestId: number) => {
+export const getContestProblems = (contestId: string | number) => {
   return request.get("/contest/getContestProblems", { params: { contestId } })
 }
 
@@ -245,11 +245,11 @@ export const addContest = (contest: {
   return request.get("/contest/addContest", { params: contest })
 }
 
-export const deleteContest = (contestId: number) => {
+export const deleteContest = (contestId: string | number) => {
   return request.get("/contest/deleteContest", { params: { contestId } })
 }
 
-export const addProblemToContest = (contestId: number, problemId: number) => {
+export const addProblemToContest = (contestId: string | number, problemId: string | number) => {
   return request.get("/contest/addProblemToContest", {
     params: { contestId, problemId },
   })
@@ -257,11 +257,11 @@ export const addProblemToContest = (contestId: number, problemId: number) => {
 
 // ==================== 聊天相关接口 ====================
 
-export const newChat = (userId: number, title?: string) => {
+export const newChat = (userId: string | number, title?: string) => {
   return request.get("/chat/new", { params: { userId, title } })
 }
 
-export const getChatHistory = (userId: number) => {
+export const getChatHistory = (userId: string | number) => {
   return request.get("/chat/getHistory", { params: { userId } })
 }
 
@@ -271,9 +271,9 @@ export const streamChatSimple = (query?: string, stop = false) => {
 
 export const streamChatWithMemory = (params: {
   query?: string
-  problemId?: number
+  problemId?: string | number
   stop?: boolean
-  messageId?: number
+  messageId?: string | number
 }) => {
   return request.get("/chat/stream/memory", { params })
 }
@@ -288,6 +288,25 @@ export const chatRagAdvisorBackup = (query?: string) => {
 
 export const chatAdd = () => {
   return request.get("/chat/add")
+}
+
+// ==================== 工具方法（聊天流式URL构建） ====================
+
+export const getApiBase = () => api_baseURL
+
+export const buildStreamChatMemoryUrl = (params: {
+  query?: string
+  problemId?: string | number
+  stop?: boolean
+  messageId?: string | number
+} = {}) => {
+  const url = new URL("/chat/stream/memory", api_baseURL)
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value))
+    }
+  })
+  return url.toString()
 }
 
 // ==================== 聊天备份相关接口 ====================

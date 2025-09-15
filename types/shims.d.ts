@@ -14,4 +14,19 @@ declare module "@monaco-editor/react" {
   export default Editor
 }
 
+declare module 'json-bigint' {
+  const j: any
+  export default j
+}
+
+declare module "markdown-it" {
+  const MarkdownIt: any
+  export default MarkdownIt
+}
+
+declare module "markdown-it-katex" {
+  const plugin: any
+  export default plugin
+}
+
 

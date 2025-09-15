@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  swcMinify: true,
+  fastRefresh: true,
   eslint: {
     ignoreDuringBuilds: true,
   },

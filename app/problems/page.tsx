@@ -1,62 +1,37 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Filter, CheckCircle, Circle, Clock } from "lucide-react"
 import Link from "next/link"
+import { searchProblems } from "@/lib/api"
 
 export default function ProblemsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [difficulty, setDifficulty] = useState("all")
   const [status, setStatus] = useState("all")
+  const [problems, setProblems] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+    // 刚开始加载页面 ，搜索一次，并渲染
 
-  const problems = [
-    {
-      id: 1,
-      title: "两数之和",
-      difficulty: "简单",
-      acceptance: "54.2%",
-      status: "solved",
-      tags: ["数组", "哈希表"],
-    },
-    {
-      id: 2,
-      title: "两数相加",
-      difficulty: "中等",
-      acceptance: "38.9%",
-      status: "attempted",
-      tags: ["链表", "数学"],
-    },
-    {
-      id: 3,
-      title: "无重复字符的最长子串",
-      difficulty: "中等",
-      acceptance: "35.6%",
-      status: "unsolved",
-      tags: ["哈希表", "字符串", "滑动窗口"],
-    },
-    {
-      id: 4,
-      title: "寻找两个正序数组的中位数",
-      difficulty: "困难",
-      acceptance: "41.3%",
-      status: "unsolved",
-      tags: ["数组", "二分查找", "分治"],
-    },
-    {
-      id: 5,
-      title: "最长回文子串",
-      difficulty: "中等",
-      acceptance: "34.8%",
-      status: "solved",
-      tags: ["字符串", "动态规划"],
-    },
-  ]
+  const fetchList = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const res = await searchProblems({ titleKeyword: searchTerm, pageNum: 1, pageSize: 50 })
+      setProblems(res.data?.list || res.data || [])
+    } catch (e: any) {
+      setError(e?.message || "加载失败")
+    } finally {
+      setLoading(false)
+    }
+  }, [searchTerm])
 
-  const getDifficultyColor = (difficulty: string) => {
+const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case "简单":
         return "bg-green-500/20 text-green-400 border-green-500/30"
@@ -80,12 +55,16 @@ export default function ProblemsPage() {
     }
   }
 
-  const filteredProblems = problems.filter((problem) => {
-    const matchesSearch = problem.title.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesDifficulty = difficulty === "all" || problem.difficulty === difficulty
-    const matchesStatus = status === "all" || problem.status === status
-    return matchesSearch && matchesDifficulty && matchesStatus
-  })
+  const filteredProblems = useMemo(() => {
+    return (problems || []).filter((p: any) => {
+      const title: string = p.title || ""
+      const diffNum: number | undefined = p.difficulty
+      const diffText = diffNum === 1 ? "简单" : diffNum === 2 ? "中等" : diffNum === 3 ? "困难" : "未知"
+      const matchesDifficulty = difficulty === "all" || diffText === difficulty
+      const matchesStatus = status === "all" // 后端暂未返回用户状态，先不过滤
+      return matchesDifficulty && matchesStatus && title.toLowerCase().includes(searchTerm.toLowerCase())
+    })
+  }, [problems, difficulty, status, searchTerm])
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -105,8 +84,21 @@ export default function ProblemsPage() {
                   placeholder="搜索题目..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      fetchList()
+                    }
+                  }}
                   className="pl-10 bg-gray-800 border-gray-700 text-gray-100"
                 />
+              </div>
+              <div>
+                <button
+                  onClick={fetchList}
+                  className="h-10 px-4 rounded bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                >
+                  <Search className="h-4 w-4" /> 搜索
+                </button>
               </div>
               <Select value={difficulty} onValueChange={setDifficulty}>
                 <SelectTrigger className="w-full md:w-32 bg-gray-800 border-gray-700">
@@ -144,28 +136,34 @@ export default function ProblemsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {filteredProblems.map((problem) => (
+              {error && <div className="text-red-400 text-sm">{error}</div>}
+              {loading && <div className="text-gray-400 text-sm">加载中...</div>}
+              {filteredProblems.map((problem: any) => (
                 <Link key={problem.id} href={`/problems/${problem.id}`}>
                   <div className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        {getStatusIcon(problem.status)}
+                        {getStatusIcon("unsolved")}
                         <div>
                           <h3 className="font-semibold text-gray-100 hover:text-blue-400 transition-colors">
                             {problem.id}. {problem.title}
                           </h3>
                           <div className="flex items-center gap-2 mt-1">
-                            {problem.tags.map((tag) => (
-                              <Badge key={tag} variant="secondary" className="text-xs bg-gray-700 text-gray-300">
-                                {tag}
+                            {(problem.tags || []).map((tag: any) => (
+                              <Badge key={tag?.name || tag} variant="secondary" className="text-xs bg-gray-700 text-gray-300">
+                                {tag?.name || tag}
                               </Badge>
                             ))}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        <Badge className={getDifficultyColor(problem.difficulty)}>{problem.difficulty}</Badge>
-                        <span className="text-sm text-gray-400 min-w-16 text-right">{problem.acceptance}</span>
+                        <Badge className={getDifficultyColor((problem.difficulty === 1 ? "简单" : problem.difficulty === 2 ? "中等" : problem.difficulty === 3 ? "困难" : "未知"))}>
+                          {problem.difficulty === 1 ? "简单" : problem.difficulty === 2 ? "中等" : problem.difficulty === 3 ? "困难" : "未知"}
+                        </Badge>
+                        {problem.acceptance && (
+                          <span className="text-sm text-gray-400 min-w-16 text-right">{problem.acceptance}</span>
+                        )}
                       </div>
                     </div>
                   </div>
