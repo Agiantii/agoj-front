@@ -1,5 +1,5 @@
 import axios from "axios"
-
+import JSONbig from 'json-bigint';
 const api_baseURL = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:9090/api"
 // const api_baseURL = process.env.NEXT_PUBLIC_API_BASE || "http://bc.agiantii.top:9090/api"
 
@@ -7,6 +7,7 @@ const api_baseURL = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:9090/a
 const request = axios.create({
   baseURL: api_baseURL,
   timeout: 10000,
+  transformResponse: [data => JSONbig({ storeAsString: true }).parse(data)]
 })
 
 // 请求拦截器
@@ -22,7 +23,7 @@ request.interceptors.request.use(
     if (userInfo) {
       const { id } = JSON.parse(userInfo)
       // 如果是需要userId的接口，自动添加
-      if (config.needUserId) {
+      if ((config as any).needUserId) {
         config.params = { ...config.params, userId: id }
       }
     }
@@ -66,7 +67,7 @@ request.interceptors.response.use(
 
 export const login = (username: string, password: string) => {
   return request.post("/user/login", null, {
-    params: { arg0: username, arg1: password },
+    params: { "username": username, "password": password },
   })
 }
 
@@ -180,7 +181,7 @@ export const uploadProblemCasesZip = (problemId: number, file: File) => {
 
 // ==================== 提交记录相关接口 ====================
 
-export const getSubmissionStatus = (submissionId: number) => {
+export const getSubmissionStatus = (submissionId: string) => {
   return request.get("/submit/getStatus", { params: { submissionId } })
 }
 

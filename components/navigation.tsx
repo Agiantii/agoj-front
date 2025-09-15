@@ -2,7 +2,9 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { login, register } from "@/lib/api"
+import { useToast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -31,6 +33,8 @@ export default function Navigation() {
   const pathname = usePathname()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const [userInfo, setUserInfo] = useState<{ username: string; email: string } | null>(null)
+  const { toast } = useToast()
 
   const navItems = [
     { href: "/", label: "首页", icon: Home },
@@ -39,20 +43,86 @@ export default function Navigation() {
     { href: "/chat", label: "聊一聊", icon: MessageCircle },
   ]
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    const token = localStorage.getItem("token")
+    const storedUserInfo = localStorage.getItem("userInfo")
+    if (token && storedUserInfo) {
+      setIsLoggedIn(true)
+      setUserInfo(JSON.parse(storedUserInfo))
+    }
+  }, [])
+
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setIsLoggedIn(true)
-    setShowAuthDialog(false)
+    const formData = new FormData(e.currentTarget)
+    const username = formData.get("username") as string
+    const password = formData.get("password") as string
+
+    try {
+      const response = await login(username, password)
+      localStorage.setItem("token", response.data)
+      const userInfo = { username, email: "" }
+      localStorage.setItem("userInfo", JSON.stringify(userInfo))
+      //save map的 userId
+      console.log(response)
+      const userId = response.map.userId
+      console.log(userId)
+      localStorage.setItem("userId", userId)
+      setUserInfo(userInfo)
+      setIsLoggedIn(true)
+      setShowAuthDialog(false)
+      toast({
+        title: "登录成功",
+        description: "欢迎回来！",
+      })
+
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "登录失败",
+        description: error instanceof Error ? error.message : "请检查用户名和密码",
+      })
+    }
   }
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setIsLoggedIn(true)
-    setShowAuthDialog(false)
+    const formData = new FormData(e.currentTarget)
+    const username = formData.get("username") as string
+    const email = formData.get("email") as string
+    const password = formData.get("password") as string
+
+    try {
+      await register({ username, email, password })
+      const response = await login(username, password)
+      localStorage.setItem("token", response.data)
+      const userInfo = { username, email }
+      localStorage.setItem("userInfo", JSON.stringify(userInfo))
+      setUserInfo(userInfo)
+      setIsLoggedIn(true)
+      setShowAuthDialog(false)
+      toast({
+        title: "注册成功",
+        description: "欢迎加入！",
+      })
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "注册失败",
+        description: error instanceof Error ? error.message : "注册失败，请稍后重试",
+      })
+    }
   }
 
   const handleLogout = () => {
+    localStorage.removeItem("token")
+    localStorage.removeItem("userInfo")
     setIsLoggedIn(false)
+    setUserInfo(null)
+    toast({
+      title: "已退出登录",
+      description: "期待您的下次访问！",
+    })
   }
 
   return (
@@ -102,8 +172,8 @@ export default function Navigation() {
                 <DropdownMenuContent className="w-56 bg-gray-900 border-gray-800" align="end" forceMount>
                   <div className="flex items-center justify-start gap-2 p-2">
                     <div className="flex flex-col space-y-1 leading-none">
-                      <p className="font-medium text-gray-100">用户名</p>
-                      <p className="w-[200px] truncate text-sm text-gray-400">user@example.com</p>
+                      <p className="font-medium text-gray-100">{userInfo?.username || "用户名"}</p>
+                      <p className="w-[200px] truncate text-sm text-gray-400">{userInfo?.email || "邮箱"}</p>
                     </div>
                   </div>
                   <DropdownMenuSeparator className="bg-gray-800" />
@@ -147,9 +217,9 @@ export default function Navigation() {
                             邮箱
                           </Label>
                           <Input
-                            id="login-email"
-                            type="email"
-                            placeholder="输入你的邮箱"
+                            name="username"
+                            type="text"
+                            placeholder="输入你的用户名"
                             className="bg-gray-800 border-gray-700 text-gray-100"
                             required
                           />
@@ -159,7 +229,7 @@ export default function Navigation() {
                             密码
                           </Label>
                           <Input
-                            id="login-password"
+                            name="password"
                             type="password"
                             placeholder="输入你的密码"
                             className="bg-gray-800 border-gray-700 text-gray-100"
@@ -178,7 +248,7 @@ export default function Navigation() {
                             用户名
                           </Label>
                           <Input
-                            id="register-username"
+                            name="username"
                             type="text"
                             placeholder="输入用户名"
                             className="bg-gray-800 border-gray-700 text-gray-100"
@@ -190,7 +260,7 @@ export default function Navigation() {
                             邮箱
                           </Label>
                           <Input
-                            id="register-email"
+                            name="email"
                             type="email"
                             placeholder="输入你的邮箱"
                             className="bg-gray-800 border-gray-700 text-gray-100"
@@ -202,7 +272,7 @@ export default function Navigation() {
                             密码
                           </Label>
                           <Input
-                            id="register-password"
+                            name="password"
                             type="password"
                             placeholder="输入密码"
                             className="bg-gray-800 border-gray-700 text-gray-100"
@@ -222,5 +292,5 @@ export default function Navigation() {
         </div>
       </div>
     </nav>
-  )
+  ) 
 }

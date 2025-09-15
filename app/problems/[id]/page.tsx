@@ -1,14 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Play, RotateCcw, Send, Clock, MemoryStick, CheckCircle, XCircle, Plus } from "lucide-react"
-import { getProblemDetail, submitProblem, searchSolutions, addSolution } from "@/lib/api"
+import { Play, RotateCcw, Send, Clock, MemoryStick, CheckCircle, XCircle, Plus, Loader2 } from "lucide-react"
+import { getProblemDetail, submitProblem, getSolutionsByProblemId, addSolution, getSubmissionStatus } from "@/lib/api"
 import { useToast } from "@/components/ui/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -19,10 +19,14 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
   const [code, setCode] = useState("")
   const [testResults, setTestResults] = useState<any[]>([])
   const [isRunning, setIsRunning] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [problem, setProblem] = useState<any>(null)
   const [solutions, setSolutions] = useState<any[]>([])
   const [solutionTitle, setSolutionTitle] = useState("")
   const [solutionContent, setSolutionContent] = useState("")
+  const [submissionStatus, setSubmissionStatus] = useState<string>("")
+  const [submissionResult, setSubmissionResult] = useState<any>(null)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const fetchProblemDetail = async () => {
@@ -33,17 +37,13 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
         setCode(res.data.template || "// 在这里编写你的代码")
 
         // 获取题解
-        const solutionsRes = await searchSolutions({
-          problemId: parseInt(params.id),
-          pageNum: 1,
-          pageSize: 10,
-        })
+        const solutionsRes = await getSolutionsByProblemId(parseInt(params.id), 1, 10)
         setSolutions(solutionsRes.data || [])
-      } catch (error) {
+      } catch (error: any) {
         toast({
           variant: "destructive",
           title: "获取题目详情失败",
-          description: error.message,
+          description: error.message || "网络错误",
         })
       }
     }
@@ -51,16 +51,79 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
     fetchProblemDetail()
   }, [params.id, toast])
 
-  const getDifficultyColor = (difficulty: string) => {
+  // 清理轮询
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [])
+
+  const getDifficultyColor = (difficulty: number) => {
     switch (difficulty) {
-      case "简单":
+      case 1:
         return "bg-green-500/20 text-green-400 border-green-500/30"
-      case "中等":
+      case 2:
         return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
-      case "困难":
+      case 3:
         return "bg-red-500/20 text-red-400 border-red-500/30"
       default:
         return "bg-gray-500/20 text-gray-400 border-gray-500/30"
+    }
+  }
+
+  const getDifficultyText = (difficulty: number) => {
+    switch (difficulty) {
+      case 1:
+        return "简单"
+      case 2:
+        return "中等"
+      case 3:
+        return "困难"
+      default:
+        return "未知"
+    }
+  }
+
+  // 轮询提交结果
+  const pollSubmissionResult = async (submissionId: string) => {
+    try {
+      const res = await getSubmissionStatus(submissionId)
+      const submission = res.data
+      
+      setSubmissionStatus(submission.status)
+      setSubmissionResult(submission)
+
+      // 如果状态不是待处理，停止轮询
+      if (submission.status !== "PENDING" && submission.status !== "TESTING") {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+        setIsSubmitting(false)
+
+        // 显示结果
+        if (submission.status === "ACCEPTED") {
+          toast({
+            title: "提交成功",
+            description: "恭喜！你的代码通过了所有测试用例",
+          })
+        } else {
+          toast({
+            variant: "destructive",
+            title: "提交失败",
+            description: submission.failMsg || "代码未通过测试",
+          })
+        }
+      }
+    } catch (error: any) {
+      console.error("轮询提交结果失败:", error)
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+      setIsSubmitting(false)
     }
   }
 
@@ -89,24 +152,23 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
         status: "TESTING", // 用于测试运行
       })
 
-      setTestResults([
-        {
-          input: res.data.input,
-          expected: res.data.expectedOutput,
-          actual: res.data.output,
-          passed: res.data.status === "ACCEPTED",
-          runtime: `${res.data.runtime}ms`,
-          memory: `${res.data.memory}MB`,
-          error: res.data.failMsg,
-        },
-      ])
-    } catch (error) {
+      // 获取提交ID并开始轮询
+      const submissionId = String(res.data)
+      if (submissionId) {
+        // 立即开始轮询
+        pollSubmissionResult(submissionId)
+        
+        // 设置定时轮询
+        pollingIntervalRef.current = setInterval(() => {
+          pollSubmissionResult(submissionId)
+        }, 1000)
+      }
+    } catch (error: any) {
       toast({
         variant: "destructive",
         title: "运行失败",
-        description: error.message,
+        description: error.message || "网络错误",
       })
-    } finally {
       setIsRunning(false)
     }
   }
@@ -120,31 +182,45 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
       return
     }
 
+    setIsSubmitting(true)
     try {
-      const userInfo = localStorage.getItem("userInfo")
-      if (!userInfo) {
-          throw new Error("请先登录")
-        }
-      const { id: userId } = JSON.parse(userInfo)
+      // const userInfo = localStorage.getItem("userInfo")
+      const userId = localStorage.getItem("userId")
+      if (!userId) {
+        throw new Error("请先登录")
+      }
 
-      await submitProblem({
+      const res = await submitProblem({
         problemId: parseInt(params.id),
-        userId,
+        userId: parseInt(userId),
         language,
         code,
         status: "PENDING", // 正式提交
       })
 
-      toast({
-        title: "提交成功",
-        description: "请在提交记录中查看结果",
-      })
-    } catch (error) {
+      // 获取提交ID并开始轮询
+      const submissionId: string = String(res.data)
+      if (submissionId) {
+        toast({
+          title: "提交成功",
+          description: "正在判题中，请稍候...",
+        })
+
+        // 立即开始轮询
+        pollSubmissionResult(submissionId)
+        
+        // 设置定时轮询
+        pollingIntervalRef.current = setInterval(() => {
+          pollSubmissionResult(submissionId)
+        }, 1000)
+      }
+    } catch (error: any) {
       toast({
         variant: "destructive",
         title: "提交失败",
-        description: error.message,
+        description: error.message || "网络错误",
       })
+      setIsSubmitting(false)
     }
   }
 
@@ -167,14 +243,14 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                 <h1 className="text-2xl font-bold">
                   {problem.id}. {problem.title}
                 </h1>
-                <Badge className={getDifficultyColor(problem.difficulty)}>{problem.difficulty}</Badge>
+                <Badge className={getDifficultyColor(problem.difficulty)}>{getDifficultyText(problem.difficulty)}</Badge>
               </div>
               <div className="flex items-center gap-4 text-sm text-gray-400">
                 <span>通过率: {problem.acceptance}</span>
                 <span>提交次数: {problem.submissions}</span>
               </div>
               <div className="flex gap-2 mt-3">
-                {problem.tags?.map((tag) => (
+                {problem.tags?.map((tag: any) => (
                   <Badge key={tag} variant="secondary" className="bg-gray-800 text-gray-300">
                     {tag}
                   </Badge>
@@ -281,11 +357,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                               })
 
                               // 刷新题解列表
-                              const solutionsRes = await searchSolutions({
-                                problemId: parseInt(params.id),
-                                pageNum: 1,
-                                pageSize: 10,
-                              })
+                              const solutionsRes = await getSolutionsByProblemId(parseInt(params.id), 1, 10)
                               setSolutions(solutionsRes.data || [])
 
                               // 清空输入
@@ -296,11 +368,11 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                                 title: "提交成功",
                                 description: "题解已发布",
                               })
-                            } catch (error) {
+                            } catch (error: any) {
                               toast({
                                 variant: "destructive",
                                 title: "提交失败",
-                                description: error.message,
+                                description: error.message || "网络错误",
                               })
                             }
                           }}
@@ -376,41 +448,76 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
             />
           </div>
 
-          {/* Test Results */}
-          {testResults.length > 0 && (
+          {/* Submission Results */}
+          {(submissionResult || testResults.length > 0) && (
             <div className="border-t border-gray-800 p-4 max-h-48 overflow-y-auto">
-              <h3 className="font-semibold mb-3">测试结果</h3>
-              <div className="space-y-2">
-                {testResults.map((result, index) => (
-                  <div key={index} className="bg-gray-800 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      {result.passed ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-red-500" />
-                      )}
-                      <span className="text-sm font-medium">
-                        测试用例 {index + 1} {result.passed ? "通过" : "失败"}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-400 space-y-1">
-                      <div>输入: {result.input}</div>
-                      <div>期望: {result.expected}</div>
-                      <div>实际: {result.actual}</div>
-                      <div className="flex gap-4">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {result.runtime}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MemoryStick className="h-3 w-3" />
-                          {result.memory}
+              <h3 className="font-semibold mb-3">提交结果</h3>
+              {submissionResult && (
+                <div className="bg-gray-800 p-3 rounded-lg mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    {submissionResult.status === "ACCEPTED" ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-sm font-medium">
+                      状态: {submissionResult.status}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400 space-y-1">
+                    {submissionResult.runtime && (
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        运行时间: {submissionResult.runtime}ms
+                      </div>
+                    )}
+                    {submissionResult.memory && (
+                      <div className="flex items-center gap-1">
+                        <MemoryStick className="h-3 w-3" />
+                        内存使用: {submissionResult.memory}MB
+                      </div>
+                    )}
+                    {submissionResult.failMsg && (
+                      <div className="text-red-400">
+                        错误信息: {submissionResult.failMsg}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {testResults.length > 0 && (
+                <div className="space-y-2">
+                  {testResults.map((result, index) => (
+                    <div key={index} className="bg-gray-800 p-3 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        {result.passed ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        )}
+                        <span className="text-sm font-medium">
+                          测试用例 {index + 1} {result.passed ? "通过" : "失败"}
                         </span>
                       </div>
+                      <div className="text-xs text-gray-400 space-y-1">
+                        <div>输入: {result.input}</div>
+                        <div>期望: {result.expected}</div>
+                        <div>实际: {result.actual}</div>
+                        <div className="flex gap-4">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {result.runtime}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MemoryStick className="h-3 w-3" />
+                            {result.memory}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -419,15 +526,27 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
               <Button
                 variant="outline"
                 onClick={handleRunCode}
-                disabled={isRunning}
+                disabled={isRunning || isSubmitting}
                 className="border-gray-600 bg-transparent"
               >
-                <Play className="h-4 w-4 mr-2" />
+                {isRunning ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4 mr-2" />
+                )}
                 {isRunning ? "运行中..." : "运行"}
               </Button>
-              <Button onClick={handleSubmit} className="bg-green-600 hover:bg-green-700">
-                <Send className="h-4 w-4 mr-2" />
-                提交
+              <Button 
+                onClick={handleSubmit} 
+                disabled={isRunning || isSubmitting}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                {isSubmitting ? "提交中..." : "提交"}
               </Button>
             </div>
           </div>
