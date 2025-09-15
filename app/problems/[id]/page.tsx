@@ -16,8 +16,15 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
 import dynamic from "next/dynamic"
+import { useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import CodeMirror from "@uiw/react-codemirror"
+import { oneDark } from "@codemirror/theme-one-dark"
+import { cpp } from "@codemirror/lang-cpp"
+import { java } from "@codemirror/lang-java"
+import { javascript } from "@codemirror/lang-javascript"
+import { python } from "@codemirror/lang-python"
 
 export default function ProblemDetailPage({ params }: { params: { id: string } }) {
   const { toast } = useToast()
@@ -40,15 +47,28 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
   const [showAdvice, setShowAdvice] = useState(false)
   const [isAccepted, setIsAccepted] = useState(false)
   const adviceAbortRef = useRef<AbortController | null>(null)
+  const codeSyncTimerRef = useRef<any>(null)
+  const initialCodeRef = useRef<string>("")
 
   const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false }) as any
+  const editorOptions = useMemo(() => ({
+    fontSize: 14,
+    minimap: { enabled: false },
+    wordWrap: "on",
+    smoothScrolling: true,
+    scrollBeyondLastLine: false,
+  }), [])
   useEffect(() => {
     const fetchProblemDetail = async () => {
       try {
         const res = await getProblemDetail(parseInt(params.id))
         setProblem(res.data)
-        // 设置默认代码模板
-        // setCode(res.data.template || "// 在这里编写你的代码")
+        // 设置默认代码模板（若编辑器已挂载则直接写入）
+        const template = res.data.template || "// 在这里编写你的代码"
+        if (!initialCodeRef.current) {
+          initialCodeRef.current = template
+        }
+        setCode(template)
 
         // 题解改为懒加载：首次进入不请求
       } catch (error: any) {
@@ -87,8 +107,18 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
         adviceAbortRef.current.abort()
         adviceAbortRef.current = null
       }
+      if (codeSyncTimerRef.current) {
+        clearTimeout(codeSyncTimerRef.current)
+        codeSyncTimerRef.current = null
+      }
     }
   }, [])
+
+  // 语言切换时仅更新模型语言，避免重建编辑器
+  useEffect(() => {
+    // This effect is no longer needed as CodeMirror handles language switching
+    // and the model is managed internally.
+  }, [language])
 
   const streamCompileAdvice = async (prompt: string) => {
     try {
@@ -533,16 +563,34 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
           </div>
 
           <div className="flex-1 p-4">
-            <div className="h-full border border-gray-700 rounded">
-              <MonacoEditor
-                height="100%"
-                defaultLanguage={language}
-                language={language}
-                theme="vs-dark"
+            <div className="h-full border border-gray-700 rounded overflow-hidden">
+              <CodeMirror
                 value={code}
-                options={{ fontSize: 14, minimap: { enabled: false }, wordWrap: "on" }}
-                onChange={(value: string | undefined) => setCode(value || "")
-                }
+                theme={oneDark}
+                height="100%"
+                extensions={(() => {
+                  switch (language) {
+                    case "cpp":
+                      return [cpp()]
+                    case "java":
+                      return [java()]
+                    case "javascript":
+                      return [javascript({ jsx: true, typescript: false })]
+                    case "python":
+                    default:
+                      return [python()]
+                  }
+                })()}
+                basicSetup={{
+                  lineNumbers: true,
+                  highlightActiveLine: true,
+                  foldGutter: true,
+                  indentOnInput: true,
+                }}
+                onChange={(value) => {
+                  if (codeSyncTimerRef.current) clearTimeout(codeSyncTimerRef.current)
+                  codeSyncTimerRef.current = setTimeout(() => setCode(value), 80)
+                }}
               />
             </div>
           </div>
