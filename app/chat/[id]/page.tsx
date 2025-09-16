@@ -7,9 +7,6 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { MessageCircle, Send, Plus, Trash2, Bot, User, ArrowLeft, RotateCcw, Square, Edit2 } from "lucide-react"
-import ReactMarkdown from "react-markdown"
-import remarkMath from "remark-math"
-import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 import { newChat, getChatHistory, buildStreamChatMemoryUrl, getProblemDetail, getMessage, deleteChat, updateChatTitle, getApiBase } from "@/lib/api"
@@ -456,7 +453,7 @@ export default function ChatIdPage() {
                       ) : (
                         <>
                           <h3 className="text-sm font-medium text-gray-200 truncate">{session.title}</h3>
-                          <p className="text-xs text-gray-400 mt-1">{session.messages.length} 条消息</p>
+                          {/* <p className="text-xs text-gray-400 mt-1">{session.messages.length} 条消息</p> */}
                         </>
                       )}
                     </div>

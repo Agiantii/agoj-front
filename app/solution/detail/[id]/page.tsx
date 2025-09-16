@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ArrowLeft, Calendar, User, ThumbsUp, Eye, ExternalLink } from "lucide-react"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 import { getSolutionDetail, getProblemDetail } from "@/lib/api"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 
 interface SolutionDetail {

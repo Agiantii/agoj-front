@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, Upload, Save, Eye, ImageIcon, Loader2 } from "lucide-react"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 import { getProblemDetail, addSolution, uploadImage } from "@/lib/api"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 export default function WriteSolutionPage() {
   const router = useRouter()

@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { login, register } from "@/lib/api"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -117,6 +117,8 @@ export default function Navigation() {
   const handleLogout = () => {
     localStorage.removeItem("token")
     localStorage.removeItem("userInfo")
+    localStorage.removeItem("userId")
+    
     setIsLoggedIn(false)
     setUserInfo(null)
     toast({
