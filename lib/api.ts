@@ -1,8 +1,7 @@
 import axios from "axios"
 import JSONbig from 'json-bigint';
-const api_baseURL = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:9090/api"
+const api_baseURL =  "http://localhost:9090/api"
 // const api_baseURL = process.env.NEXT_PUBLIC_API_BASE || "http://bc.agiantii.top:9090/api"
-
 // 创建axios实例
 const request = axios.create({
   baseURL: api_baseURL,
@@ -260,15 +259,21 @@ export const addProblemToContest = (contestId: string | number, problemId: strin
 export const newChat = (userId: string | number, title?: string) => {
   return request.get("/chat/new", { params: { userId, title } })
 }
-
+// 获取所有聊天记录的大概
 export const getChatHistory = (userId: string | number) => {
   return request.get("/chat/getHistory", { params: { userId } })
 }
-
+//获得具体某次聊天记录
+export const getMessage = (messageId: string | number)=>{
+  return request.get("/chat/getMessages", { params: { messageId } })
+}
 export const streamChatSimple = (query?: string, stop = false) => {
   return request.get("/chat/stream/simple", { params: { query, stop } })
 }
-
+// 删除聊天记录
+export const deleteChat = (messageId: string | number) => {
+  return request.delete("/chat/delete", { params: { messageId } })
+}
 export const streamChatWithMemory = (params: {
   query?: string
   problemId?: string | number
@@ -300,12 +305,14 @@ export const buildStreamChatMemoryUrl = (params: {
   stop?: boolean
   messageId?: string | number
 } = {}) => {
-  const url = new URL("/chat/stream/memory", api_baseURL)
+  // 直接使用完整的 API 地址
+  const url = new URL("http://localhost:9090/api/chat/stream/memory")
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
       url.searchParams.set(key, String(value))
     }
   })
+  console.log(url)
   return url.toString()
 }
 

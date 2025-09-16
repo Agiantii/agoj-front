@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { MessageCircle, Send, Plus, Trash2, Bot, User, ArrowLeft } from "lucide-react"
+import { MessageCircle, Send, Plus, Trash2, Bot, User, ArrowLeft, RotateCcw, Square } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
-import { newChat, getChatHistory, buildStreamChatMemoryUrl } from "@/lib/api"
+import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
+import { newChat, getChatHistory, buildStreamChatMemoryUrl, getProblemDetail, getMessage } from "@/lib/api"
 import { useRouter, useSearchParams, useParams } from "next/navigation"
 
 interface Message {
@@ -34,11 +35,28 @@ export default function ChatIdPage() {
   const searchParams = useSearchParams()
   const chatId = params.id as string
   const initialMessage = searchParams.get('message')
+  const [problemId, setProblemId] = useState('') // 新增题目ID状态
+  const [problemDescription, setProblemDescription] = useState('') // 新增题目描述状态
+  
+  // 从问题详情页面复制的 getProblemDetail 函数
+  const fetchProblemDetail = async (id: number) => {
+    try {
+      const res = await getProblemDetail(id) // 使用从 lib/api.ts 导入的 getProblemDetail
+      setProblemDescription(res.data.description || "")
+      return res.data
+    } catch (error: any) {
+      console.error("获取题目详情失败:", error)
+      return null
+    }
+  }
   
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string>(chatId || "")
   const [inputMessage, setInputMessage] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const userIdRef = useRef<number | null>(null)
 
@@ -72,13 +90,15 @@ export default function ChatIdPage() {
     }
   }, [initialMessage, currentSessionId])
 
-  // 加载会话列表
+  // 加载会话列表和消息历史
   useEffect(() => {
     const init = async () => {
       try {
         const userIdStr = localStorage.getItem("userId")
         if (!userIdStr) return
         userIdRef.current = parseInt(userIdStr)
+        
+        // 加载会话列表
         const res = await getChatHistory(userIdRef.current)
         const list = res?.data || []
         const mapped: ChatSession[] = (Array.isArray(list) ? list : []).map((it: any) => ({
@@ -88,12 +108,37 @@ export default function ChatIdPage() {
           createdAt: new Date(it.createTime || Date.now()),
         }))
         setSessions(mapped)
+        
+        // 如果有当前会话ID，加载该会话的历史消息
+        if (currentSessionId && currentSessionId !== "new") {
+          try {
+            const messageRes = await getMessage(currentSessionId)
+            const messages = messageRes?.data || []
+            const formattedMessages: Message[] = messages.map((msg: any) => ({
+              id: String(msg.id || Date.now()),
+              content: msg.content || "",
+              role: msg.role === "user" ? "user" : "assistant",
+              timestamp: new Date(msg.createTime || Date.now()),
+            }))
+            
+            // 更新当前会话的消息
+            setSessions(prev => 
+              prev.map(session => 
+                session.id === currentSessionId 
+                  ? { ...session, messages: formattedMessages }
+                  : session
+              )
+            )
+          } catch (error) {
+            console.error("加载消息历史失败:", error)
+          }
+        }
       } catch (e) {
         console.error("加载聊天历史失败:", e)
       }
     }
     init()
-  }, [])
+  }, [currentSessionId])
 
 
 
@@ -125,8 +170,30 @@ export default function ChatIdPage() {
     }
   }
 
+  // 停止流式输出
+  const stopStreaming = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    if (streamReaderRef.current) {
+      streamReaderRef.current.cancel()
+      streamReaderRef.current = null
+    }
+    setIsStreaming(false)
+    setIsLoading(false)
+  }
+
+  // 清理资源
+  useEffect(() => {
+    return () => {
+      stopStreaming()
+    }
+  }, [])
+
+  // 在发送消息时获取问题描述
   const sendMessage = async (messageToSend?: string) => {
-    const message = messageToSend || inputMessage
+    let message = messageToSend || inputMessage
     if (!message.trim()) return
 
     // 确保存在会话ID
@@ -134,6 +201,20 @@ export default function ChatIdPage() {
     if (!sessionId) {
       sessionId = (await createNewSession()) || ""
       if (!sessionId) return
+    }
+
+    // 获取问题描述
+    let description = ""
+    if (problemId) {
+      // 使用从问题详情页面复制的 getProblemDetail 函数
+      const problemData = await fetchProblemDetail(parseInt(problemId))
+      if (problemData) {
+        const details = problemData || ""
+
+        console.log("问题描述details:", details)  
+        message =  `${message} 问题描述:${problemData.description} 输入样例:${problemData.testInput} 输出样例:${problemData.testOutput}`
+        
+      }
     }
 
     const userMessage: Message = {
@@ -158,17 +239,35 @@ export default function ChatIdPage() {
 
     setInputMessage("")
     setIsLoading(true)
+    setIsStreaming(true)
     
+    // 创建 AbortController 用于中断请求
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    
+    // 直接使用完整的API地址，避免中文编码问题
+    const url = new URL("http://localhost:9090/api/chat/stream/memory")
+    url.searchParams.set("query", message)
+    url.searchParams.set("messageId", sessionId)
+    if (problemId) {
+      url.searchParams.set("problemId", problemId)
+    }
+    
+    console.log("url:", url.toString())
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : undefined
       // 带记忆的流式接口
-      const url = buildStreamChatMemoryUrl({ query: message, messageId: sessionId })
-      const res = await fetch(url, {
+
+      const res = await fetch(url.toString(), {
         method: "GET",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        signal: controller.signal,
       })
       
       const reader = res.body?.getReader()
+      if (reader) {
+        streamReaderRef.current = reader
+      }
       const decoder = new TextDecoder("utf-8")
       const assistantId = (Date.now() + 1).toString()
       
@@ -201,6 +300,11 @@ export default function ChatIdPage() {
         }
       }
     } catch (e) {
+      if ((e as any)?.name === "AbortError") {
+        // 用户手动停止，不显示错误
+        console.log("用户停止了流式输出")
+        return
+      }
       console.error("发送消息失败:", e)
       // 降级：非流式
       const assistantMessage: Message = {
@@ -216,6 +320,9 @@ export default function ChatIdPage() {
       )
     } finally {
       setIsLoading(false)
+      setIsStreaming(false)
+      abortControllerRef.current = null
+      streamReaderRef.current = null
     }
   }
 
@@ -318,12 +425,7 @@ export default function ChatIdPage() {
                         }`}
                       >
                       <div className="prose prose-invert max-w-none text-gray-100">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkMath]}
-                          rehypePlugins={[rehypeKatex]}
-                        >
-                          {message.content || ""}
-                        </ReactMarkdown>
+                        <MarkdownRenderer content={message.content || ""} />
                       </div>
                         <div className="text-xs opacity-70 mt-2">{message.timestamp.toLocaleTimeString()}</div>
                       </div>
@@ -345,7 +447,7 @@ export default function ChatIdPage() {
                           <Bot className="h-4 w-4" />
                         </AvatarFallback>
                       </Avatar>
-                      <div className="bg-gray-800 rounded-lg p-4">
+                      <div className="bg-gray-800 rounded-lg p-4 flex items-center gap-3">
                         <div className="flex space-x-1">
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                           <div
@@ -357,6 +459,16 @@ export default function ChatIdPage() {
                             style={{ animationDelay: "0.2s" }}
                           ></div>
                         </div>
+                        {isStreaming && (
+                          <Button
+                            onClick={stopStreaming}
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                          >
+                            <Square className="h-3 w-3" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -367,22 +479,50 @@ export default function ChatIdPage() {
               {/* Input */}
               <div className="p-4 border-t border-gray-800 bg-gray-900">
                 <div className="max-w-4xl mx-auto">
-                  <div className="flex gap-3">
-                    <Input
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      placeholder="输入你的问题..."
-                      className="flex-1 bg-gray-800 border-gray-700 text-gray-100"
-                      disabled={isLoading}
-                    />
-                    <Button
-                      onClick={() => sendMessage()}
-                      disabled={!inputMessage.trim() || isLoading}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
+                  <div className="flex flex-col gap-3"> 
+                    <div className="flex gap-3"> 
+                      <Input
+                        value={problemId}
+                        onChange={(e) => setProblemId(e.target.value)}
+                        placeholder="输入题目ID..."
+                        className="flex-1 bg-gray-800 border-gray-700 text-gray-100"
+                      />
+                      <Button // 清除题目ID按钮
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setProblemId("")}
+                        className="p-2 text-gray-400 hover:text-gray-200"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    <div className="flex gap-3"> // 原来的消息输入区域
+                      <Input
+                        value={inputMessage}
+                        onChange={(e) => setInputMessage(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="输入你的问题..."
+                        className="flex-1 bg-gray-800 border-gray-700 text-gray-100"
+                        disabled={isLoading}
+                      />
+                      {isStreaming ? (
+                        <Button
+                          onClick={stopStreaming}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          <Square className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => sendMessage()}
+                          disabled={!inputMessage.trim() || isLoading}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

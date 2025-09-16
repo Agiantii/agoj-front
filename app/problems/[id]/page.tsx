@@ -8,13 +8,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Play, RotateCcw, Send, Clock, MemoryStick, CheckCircle, XCircle, Plus, Loader2 } from "lucide-react"
-import { getProblemDetail, submitProblem, getSolutionsByProblemId, addSolution, getSubmissionStatus } from "@/lib/api"
+import { getProblemDetail, submitProblem, getSolutionsByProblemId, addSolution, getSubmissionStatus, getApiBase } from "@/lib/api"
 import { SUBMISSION_STATUS, IN_PROGRESS_STATUSES } from "@/components/const/submissionStatus"
 import { useToast } from "@/components/ui/use-toast"
-import ReactMarkdown from "react-markdown"
-import remarkMath from "remark-math"
-import rehypeKatex from "rehype-katex"
-import "katex/dist/katex.min.css"
+import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 import dynamic from "next/dynamic"
 import { useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -122,7 +119,8 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
 
   const streamCompileAdvice = async (prompt: string) => {
     try {
-      const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:9090/api"
+      // const base = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:9090/api"
+      const base = getApiBase()
       const controller = new AbortController()
       adviceAbortRef.current = controller
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : undefined
@@ -219,6 +217,13 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
           setIsChatting(true)
           setShowAdvice(true)
           const prompt = `debug my code: ${code} error: ${submission.failMsg || "null"}, return in Chinese!!!`.
+            toString()
+          await streamCompileAdvice(prompt)
+        }
+        else if(submission.status == SUBMISSION_STATUS.WRONG_ANSWER){
+          setIsChatting(true)
+          setShowAdvice(true)
+          const prompt = `算法问题描述:${problem.description} 输入样例:${problem.testInput} 输出样例:${problem.testOutput},我的代码${code} , return in Chinese!!!`.
             toString()
           await streamCompileAdvice(prompt)
         }
@@ -388,11 +393,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
               <TabsContent value="description" className="space-y-6">
                 <Card className="bg-gray-900 border-gray-800">
                   <CardContent className="pt-6">
-                    <div className="prose prose-invert max-w-none">
-                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                        {problem.description || ""}
-                      </ReactMarkdown>
-                    </div>
+                    <MarkdownRenderer content={problem.description || ""} />
                   </CardContent>
                 </Card>
 
@@ -639,9 +640,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                     {isChatting && <Loader2 className="h-3 w-3 animate-spin" />}
                   </div>
                   <div className="prose prose-invert max-w-none text-xs text-gray-300">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {aiAdvice || "正在生成建议..."}
-                    </ReactMarkdown>
+                    <MarkdownRenderer content={aiAdvice || "正在生成建议..."} className="text-xs text-gray-300" />
                   </div>
                 </div>
               )}
@@ -714,15 +713,4 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
       </div>
     </div>
   )
-}
-
-
-interface TestResult {
-  input: string
-  expected: string
-  actual: string
-  passed: boolean
-  runtime: string
-  memory: string
-  error?: string
 }

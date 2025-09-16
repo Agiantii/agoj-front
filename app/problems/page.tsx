@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +16,23 @@ export default function ProblemsPage() {
   const [problems, setProblems] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-    // 刚开始加载页面 ，搜索一次，并渲染
+
+  // 初始加载时不使用 titleKey 获取所有题目
+  useEffect(() => {
+    const fetchInitialProblems = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const res = await searchProblems({ pageNum: 1, pageSize: 50 })
+        setProblems(res.data?.list || res.data || [])
+      } catch (e: any) {
+        setError(e?.message || "加载失败")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchInitialProblems()
+  }, [])
 
   const fetchList = useCallback(async () => {
     try {
