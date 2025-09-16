@@ -14,11 +14,12 @@ import "katex/dist/katex.min.css"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 import { newChat, getChatHistory, buildStreamChatMemoryUrl, getProblemDetail, getMessage, deleteChat, updateChatTitle, getApiBase } from "@/lib/api"
 import { useRouter, useSearchParams, useParams } from "next/navigation"
+import { CHAT_SENDERS, type ChatSender } from "@/components/const"
 
 interface Message {
   id: string
   content: string
-  role: "user" | "assistant"
+  sender: ChatSender
   timestamp: Date
 }
 
@@ -120,7 +121,7 @@ export default function ChatIdPage() {
             const formattedMessages: Message[] = messages.map((msg: any) => ({
               id: String(msg.id || Date.now()),
               content: msg.content || "",
-              role: msg.role === "user" ? "user" : "assistant",
+              sender: msg.sender === CHAT_SENDERS.USER ? CHAT_SENDERS.USER : CHAT_SENDERS.AGENT,
               timestamp: new Date(msg.createTime || Date.now()),
             }))
             
@@ -264,7 +265,7 @@ export default function ChatIdPage() {
     const userMessage: Message = {
       id: Date.now().toString(),
       content: message,
-      role: "user",
+      sender: CHAT_SENDERS.USER,
       timestamp: new Date(),
     }
 
@@ -322,7 +323,7 @@ export default function ChatIdPage() {
       setSessions((prev) =>
         prev.map((session) =>
           session.id === sessionId
-            ? { ...session, messages: [...session.messages, { id: assistantId, content: "", role: "assistant", timestamp: new Date() }] }
+            ? { ...session, messages: [...session.messages, { id: assistantId, content: "", sender: CHAT_SENDERS.AGENT, timestamp: new Date() }] }
             : session,
         ),
       )
@@ -357,7 +358,7 @@ export default function ChatIdPage() {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: "抱歉，流式接口不可用。请稍后再试。",
-        role: "assistant",
+        sender: CHAT_SENDERS.AGENT,
         timestamp: new Date(),
       }
       setSessions((prev) =>
@@ -507,9 +508,9 @@ export default function ChatIdPage() {
                   {currentSession.messages.map((message) => (
                     <div
                       key={message.id}
-                      className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                      className={`flex gap-3 ${message.sender === CHAT_SENDERS.USER ? "justify-end" : "justify-start"}`}
                     >
-                      {message.role === "assistant" && (
+                      {message.sender === CHAT_SENDERS.AGENT && (
                         <Avatar className="h-8 w-8 bg-blue-600">
                           <AvatarFallback>
                             <Bot className="h-4 w-4" />
@@ -519,7 +520,7 @@ export default function ChatIdPage() {
 
                       <div
                         className={`max-w-[70%] rounded-lg p-4 ${
-                          message.role === "user" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-100"
+                          message.sender === CHAT_SENDERS.USER ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-100"
                         }`}
                       >
                       <div className="prose prose-invert max-w-none text-gray-100">
@@ -528,7 +529,7 @@ export default function ChatIdPage() {
                         <div className="text-xs opacity-70 mt-2">{message.timestamp.toLocaleTimeString()}</div>
                       </div>
 
-                      {message.role === "user" && (
+                      {message.sender === CHAT_SENDERS.USER && (
                         <Avatar className="h-8 w-8 bg-gray-600">
                           <AvatarFallback>
                             <User className="h-4 w-4" />
@@ -595,7 +596,7 @@ export default function ChatIdPage() {
                       </Button>
                     </div>
                     
-                    <div className="flex gap-3"> // 原来的消息输入区域
+                    <div className="flex gap-3"> 
                       <Input
                         value={inputMessage}
                         onChange={(e) => setInputMessage(e.target.value)}

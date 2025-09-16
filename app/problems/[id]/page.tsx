@@ -12,7 +12,7 @@ import { getProblemDetail, submitProblem, getSolutionsByProblemId, addSolution, 
 import { SUBMISSION_STATUS, IN_PROGRESS_STATUSES } from "@/components/const/submissionStatus"
 import { useToast } from "@/components/ui/use-toast"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
-import dynamic from "next/dynamic"
+// import dynamic from "next/dynamic"
 import { useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -48,7 +48,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
   const codeSyncTimerRef = useRef<any>(null)
   const initialCodeRef = useRef<string>("")
 
-  const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false }) as any
+  // const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false }) as any
   const editorOptions = useMemo(() => ({
     fontSize: 14,
     minimap: { enabled: false },
