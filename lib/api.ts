@@ -161,6 +161,24 @@ export const getPassedCount = (problemId: string | number) => {
   return request.get("/problem/getPassedCount", { params: { problemId } })
 }
 
+// 管理员题目相关接口
+export const updateProblem = (problemId: string | number, problemData: {
+  title?: string
+  description?: string
+  difficulty?: number
+  timeLimit?: number
+  memoryLimit?: number
+  status?: number
+  testInput?: string
+  testOutput?: string
+}) => {
+  return request.put(`/problem/${problemId}`, problemData)
+}
+
+export const deleteProblem = (problemId: string | number) => {
+  return request.delete(`/problem/${problemId}`)
+}
+
 // ==================== 题目测试用例相关接口 ====================
 
 export const getProblemCases = (problemId: string | number) => {
@@ -223,6 +241,20 @@ export const approveSolution = (solutionId: string | number) => {
 
 export const rejectSolution = (solutionId: string | number) => {
   return request.get("/solution/reject", { params: { solutionId } })
+}
+
+// 管理员题解相关接口
+export const updateSolution = (solutionId: string | number, solutionData: {
+  title?: string
+  content?: string
+  status?: number
+  msg?: string
+}) => {
+  return request.put(`/solution/${solutionId}`, solutionData)
+}
+
+export const deleteSolution = (solutionId: string | number) => {
+  return request.delete(`/solution/${solutionId}`)
 }
 
 // ==================== 比赛相关接口 ====================
