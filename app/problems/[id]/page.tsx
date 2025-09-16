@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Play, RotateCcw, Send, Clock, MemoryStick, CheckCircle, XCircle, Plus, Loader2 } from "lucide-react"
+import { Play, RotateCcw, Send, Clock, MemoryStick, CheckCircle, XCircle, Plus, Loader2, PenTool } from "lucide-react"
 import { getProblemDetail, submitProblem, getSolutionsByProblemId, addSolution, getSubmissionStatus, getApiBase } from "@/lib/api"
 import { SUBMISSION_STATUS, IN_PROGRESS_STATUSES } from "@/components/const/submissionStatus"
 import { useToast } from "@/components/ui/use-toast"
@@ -22,6 +22,7 @@ import { cpp } from "@codemirror/lang-cpp"
 import { java } from "@codemirror/lang-java"
 import { javascript } from "@codemirror/lang-javascript"
 import { python } from "@codemirror/lang-python"
+import Link from "next/link"
 
 export default function ProblemDetailPage({ params }: { params: { id: string } }) {
   const { toast } = useToast()
@@ -435,94 +436,106 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
               <TabsContent value="solutions">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-semibold">题解列表</h2>
-                  <Dialog>
-                    <DialogTrigger asChild>
+                  <div className="flex gap-2">
+                    <Link href={`/solution/write/${params.id}`}>
                       <Button className="bg-green-600 hover:bg-green-700">
-                        <Plus className="h-4 w-4 mr-2" />
+                        <PenTool className="h-4 w-4 mr-2" />
                         写题解
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-gray-900 border-gray-800">
-                      <DialogHeader>
-                        <DialogTitle>提交题解</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Input
-                            placeholder="题解标题"
-                            value={solutionTitle}
-                            onChange={(e) => setSolutionTitle(e.target.value)}
-                            className="bg-gray-800 border-gray-700"
-                          />
-                        </div>
-                        <div>
-                          <Textarea
-                            placeholder="题解内容..."
-                            value={solutionContent}
-                            onChange={(e) => setSolutionContent(e.target.value)}
-                            className="min-h-[200px] bg-gray-800 border-gray-700"
-                          />
-                        </div>
-                        <Button
-                          className="w-full bg-green-600 hover:bg-green-700"
-                          onClick={async () => {
-                            try {
-                              const userInfo = localStorage.getItem("userInfo")
-                              if (!userInfo) {
-                                throw new Error("请先登录")
-                              }
-                              const { id: userId } = JSON.parse(userInfo)
-
-                              await addSolution({
-                                problemId: parseInt(params.id),
-                                userId,
-                                title: solutionTitle,
-                                content: solutionContent,
-                              })
-
-                              // 刷新题解列表
-                              const solutionsRes = await getSolutionsByProblemId(parseInt(params.id), 1, 10)
-                              setSolutions(solutionsRes.data || [])
-
-                              // 清空输入
-                              setSolutionTitle("")
-                              setSolutionContent("")
-
-                              toast({
-                                title: "提交成功",
-                                description: "题解已发布",
-                              })
-                            } catch (error: any) {
-                              toast({
-                                variant: "destructive",
-                                title: "提交失败",
-                                description: error.message || "网络错误",
-                              })
-                            }
-                          }}
-                        >
-                          提交
+                    </Link>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className="border-gray-600 bg-transparent">
+                          <Plus className="h-4 w-4 mr-2" />
+                          快速发布
                         </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent className="bg-gray-900 border-gray-800">
+                        <DialogHeader>
+                          <DialogTitle>提交题解</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Input
+                              placeholder="题解标题"
+                              value={solutionTitle}
+                              onChange={(e) => setSolutionTitle(e.target.value)}
+                              className="bg-gray-800 border-gray-700"
+                            />
+                          </div>
+                          <div>
+                            <Textarea
+                              placeholder="题解内容..."
+                              value={solutionContent}
+                              onChange={(e) => setSolutionContent(e.target.value)}
+                              className="min-h-[200px] bg-gray-800 border-gray-700"
+                            />
+                          </div>
+                          <Button
+                            className="w-full bg-green-600 hover:bg-green-700"
+                            onClick={async () => {
+                              try {
+                                const userInfo = localStorage.getItem("userInfo")
+                                if (!userInfo) {
+                                  throw new Error("请先登录")
+                                }
+                                const { id: userId } = JSON.parse(userInfo)
+
+                                await addSolution({
+                                  problemId: parseInt(params.id),
+                                  userId,
+                                  title: solutionTitle,
+                                  content: solutionContent,
+                                })
+
+                                // 刷新题解列表
+                                const solutionsRes = await getSolutionsByProblemId(parseInt(params.id), 1, 10)
+                                setSolutions(solutionsRes.data || [])
+
+                                // 清空输入
+                                setSolutionTitle("")
+                                setSolutionContent("")
+
+                                toast({
+                                  title: "提交成功",
+                                  description: "题解已发布",
+                                })
+                              } catch (error: any) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "提交失败",
+                                  description: error.message || "网络错误",
+                                })
+                              }
+                            }}
+                          >
+                            提交
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
                 {solutions.length > 0 ? (
                   <div className="space-y-4">
                     {solutions.map((solution) => (
-                      <Card key={solution.id} className="bg-gray-900 border-gray-800">
-                        <CardHeader>
-                          <CardTitle className="text-lg">{solution.title}</CardTitle>
-                          <div className="text-sm text-gray-400">
-                            作者：{solution.username} · {new Date(solution.createTime).toLocaleDateString()}
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="prose prose-invert max-w-none">
-                            <div className="whitespace-pre-wrap">{solution.content}</div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <Link key={solution.id} href={`/solution/${solution.id}`}>
+                        <Card className="bg-gray-900 border-gray-800 hover:border-gray-600 transition-colors cursor-pointer">
+                          <CardHeader>
+                            <CardTitle className="text-lg hover:text-blue-400 transition-colors">{solution.title}</CardTitle>
+                            <div className="text-sm text-gray-400">
+                              作者：{solution.username} · {new Date(solution.createTime).toLocaleDateString()}
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="prose prose-invert max-w-none">
+                              <div className="whitespace-pre-wrap line-clamp-3 text-gray-300">
+                                {solution.content?.substring(0, 200)}...
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
                     ))}
                   </div>
                 ) : (

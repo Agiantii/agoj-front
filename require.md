@@ -29,13 +29,21 @@ leetocde 风格，暗色
     - 增加一个题目id的 input,使得可以将 problemId 加入请求参数,同时请求时将问题描述也加入query中
     - 支持 停止流式输出
     - 进入 chat/[id] 要根据 messageId 获取对应的记录，并显示
+    - 左侧历史历史聊天记录 渲染支持 用 delete 删除
 + 导航栏 
     - 首页
     - 题目
     - 比赛
     - 聊一聊
     - 最右侧 登录/注册按钮
-
++ 写题解
+  - 路由 solution/write/[problemId]
+  - 富文本编辑器,支持md渲染
+  - 根据api,支持图片粘贴，用api上传图片，放回url 
+- 具体题解页面
+   - 路由 solution/[id]
+   - 用之前的md渲染组件
+   - 主页 和 题目 等地方 支持跳转到 solution/[id]
 ## 后端接口参考 上传的文档
 封装一个api类
 

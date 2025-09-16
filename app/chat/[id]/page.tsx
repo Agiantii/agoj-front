@@ -12,7 +12,7 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
-import { newChat, getChatHistory, buildStreamChatMemoryUrl, getProblemDetail, getMessage } from "@/lib/api"
+import { newChat, getChatHistory, buildStreamChatMemoryUrl, getProblemDetail, getMessage, deleteChat } from "@/lib/api"
 import { useRouter, useSearchParams, useParams } from "next/navigation"
 
 interface Message {
@@ -65,6 +65,7 @@ export default function ChatIdPage() {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
+
 
   useEffect(() => {
     scrollToBottom()
@@ -158,15 +159,26 @@ export default function ChatIdPage() {
     }
   }
 
-  const deleteSession = (sessionId: string) => {
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId))
-    if (currentSessionId === sessionId) {
-      const remainingSessions = sessions.filter((s) => s.id !== sessionId)
-      if (remainingSessions[0]) {
-        router.push(`/chat/${remainingSessions[0].id}`)
-      } else {
-        router.push("/chat")
+  const deleteSession = async (sessionId: string) => {
+    try {
+      // 调用后端删除接口
+      await deleteChat(sessionId)
+      
+      // 删除成功后更新本地状态
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+      
+      // 如果删除的是当前会话，导航到其他会话或主页
+      if (currentSessionId === sessionId) {
+        const remainingSessions = sessions.filter((s) => s.id !== sessionId)
+        if (remainingSessions[0]) {
+          router.push(`/chat/${remainingSessions[0].id}`)
+        } else {
+          router.push("/chat")
+        }
       }
+    } catch (error) {
+      console.error("删除会话失败:", error)
+      // 可以添加错误提示，例如使用 toast
     }
   }
 

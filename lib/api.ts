@@ -213,6 +213,10 @@ export const getSolutionsByProblemId = (problemId: string | number, pageNum = 1,
   })
 }
 
+export const getSolutionDetail = (solutionId: string | number) => {
+  return request.get("/solution/detail", { params: { solutionId } })
+}
+
 export const approveSolution = (solutionId: string | number) => {
   return request.get("/solution/approve", { params: { solutionId } })
 }
@@ -272,7 +276,7 @@ export const streamChatSimple = (query?: string, stop = false) => {
 }
 // 删除聊天记录
 export const deleteChat = (messageId: string | number) => {
-  return request.delete("/chat/delete", { params: { messageId } })
+  return request.get("/chat/delete", { params: { messageId } })
 }
 export const streamChatWithMemory = (params: {
   query?: string

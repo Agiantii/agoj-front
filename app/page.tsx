@@ -138,25 +138,27 @@ export default function HomePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {latestSolutions.map((solution: any) => (
-                <div key={solution.id} className="p-4 rounded-lg bg-gray-800 border border-gray-700">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold text-gray-100">{solution.title || solution.problemTitle || "题解"}</h3>
-                    {solution.difficulty && (
-                      <Badge className={getDifficultyColor(solution.difficulty)}>{solution.difficulty}</Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between text-sm text-gray-400">
-                    <span>by {solution.username || solution.author || solution.userName || "匿名"}</span>
-                    <div className="flex items-center gap-3">
-                      {solution.language && (
-                        <span className="bg-gray-700 px-2 py-1 rounded text-xs">{solution.language}</span>
+                <Link key={solution.id} href={`/solution/detail/${solution.id}`}>
+                  <div className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-semibold text-gray-100 hover:text-blue-400 transition-colors">{solution.title || solution.problemTitle || "题解"}</h3>
+                      {solution.difficulty && (
+                        <Badge className={getDifficultyColor(solution.difficulty)}>{solution.difficulty}</Badge>
                       )}
-                      {typeof solution.likes !== "undefined" || typeof solution.likeCount !== "undefined" ? (
-                        <span className="flex items-center gap-1">👍 {solution.likes ?? solution.likeCount}</span>
-                      ) : null}
+                    </div>
+                    <div className="flex items-center justify-between text-sm text-gray-400">
+                      <span>by {solution.username || solution.author || solution.userName || "匿名"}</span>
+                      <div className="flex items-center gap-3">
+                        {solution.language && (
+                          <span className="bg-gray-700 px-2 py-1 rounded text-xs">{solution.language}</span>
+                        )}
+                        {typeof solution.likes !== "undefined" || typeof solution.likeCount !== "undefined" ? (
+                          <span className="flex items-center gap-1">👍 {solution.likes ?? solution.likeCount}</span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
               <Link href="/problems">
                 <Button variant="ghost" className="w-full text-blue-400 hover:text-blue-300 hover:bg-gray-800">
