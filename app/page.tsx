@@ -138,7 +138,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {latestSolutions.map((solution: any) => (
-                <Link key={solution.id} href={`/solution/detail/${solution.id}`}>
+                <Link key={solution.id} href={`/solution/${solution.id}`}>
                   <div className="p-4 rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer">
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-semibold text-gray-100 hover:text-blue-400 transition-colors">{solution.title || solution.problemTitle || "题解"}</h3>

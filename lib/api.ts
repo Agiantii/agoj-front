@@ -81,7 +81,7 @@ export const register = (userData: {
 }
 
 export const updateUser = (
-  id: number,
+  id: string,
   userData: {
     username?: string
     password?: string
@@ -112,7 +112,7 @@ export const searchProblems = (params: {
   titleKeyword?: string
   descriptionKeyword?: string
   tagName?: string
-  tagId?: number
+  tagId?: string
   pageNum?: number
   pageSize?: number
 }) => {
@@ -148,7 +148,7 @@ export const submitProblem = (submission: {
   input?: string
   output?: string
   expectedOutput?: string
-  contestId?: number
+  contestId?: string
 }) => {
   return request.post("/problem/submit", submission)
 }
@@ -187,8 +187,8 @@ export const getSubmissionStatus = (submissionId: string) => {
 // ==================== 题解相关接口 ====================
 
 export const addSolution = (solution: {
-  problemId: number
-  userId: number
+  problemId: string
+  userId: string
   title: string
   content: string
   status?: number
@@ -202,7 +202,7 @@ export const searchSolutions = (params: {
   visible: number
   pageNum: number
   pageSize: number
-  problemId?: number
+  problemId?: string
 }) => {
   return request.get("/solution/search", { params })
 }
@@ -278,6 +278,17 @@ export const streamChatSimple = (query?: string, stop = false) => {
 export const deleteChat = (messageId: string | number) => {
   return request.get("/chat/delete", { params: { messageId } })
 }
+// 修改聊天title
+export const updateChatTitle = (params: {
+  messageId: string | number
+  title: string
+}) => {
+  return request.get("/chat/updateTitle", {params})
+}
+// delete content
+export const deleteContent = (params: { contentId: string | number }) => {
+  return request.get("/deleteContent", { params })
+}
 export const streamChatWithMemory = (params: {
   query?: string
   problemId?: string | number
@@ -330,7 +341,7 @@ export const chatBackupStream = (query?: string, stop = false) => {
   return request.get("/chat-backup/stream", { params: { query, stop } })
 }
 
-export const chatBackupCall = (query?: string, problemId?: number) => {
+export const chatBackupCall = (query?: string, problemId?: string) => {
   return request.get("/chat-backup/call", { params: { query, problem_id: problemId } })
 }
 
@@ -381,7 +392,7 @@ export const testApi = () => {
 // ==================== 类型定义 ====================
 
 export interface User {
-  id: number
+  id: string
   username: string
   password?: string
   email: string
@@ -392,7 +403,7 @@ export interface User {
 }
 
 export interface UserVo {
-  id: number
+  id: string
   username: string
   email: string
   role: string
@@ -402,7 +413,7 @@ export interface UserVo {
 }
 
 export interface Problem {
-  id: number
+  id: string
   title: string
   description: string
   difficulty: number
@@ -415,7 +426,7 @@ export interface Problem {
 }
 
 export interface ProblemBriefVo {
-  id: number
+  id: string
   title: string
   description: string
   difficulty: number
@@ -429,23 +440,23 @@ export interface ProblemBriefVo {
 }
 
 export interface ProblemTag {
-  id: number
+  id: string
   color: string
   description: string
   name: string
 }
 
 export interface ProblemCase {
-  id: number
-  problemId: number
+  id: string
+  problemId: string
   input: string
   output: string
 }
 
 export interface Submission {
-  id: number
-  problemId: number
-  userId: number
+  id: string
+  problemId: string
+  userId: string
   language: string
   code: string
   status: string
@@ -456,13 +467,13 @@ export interface Submission {
   input?: string
   output?: string
   expectedOutput?: string
-  contestId?: number
+  contestId?: string
 }
 
 export interface Solution {
-  id: number
-  problemId: number
-  userId: number
+  id: string
+  problemId: string
+  userId: string
   title: string
   content: string
   createTime: string
@@ -473,7 +484,7 @@ export interface Solution {
 }
 
 export interface Contest {
-  id: number
+  id: string
   title: string
   description: string
   createTime: string
@@ -484,7 +495,7 @@ export interface Contest {
 }
 
 export interface ContestProblemBrief {
-  id: number
+  id: string
   title: string
   description: string
   difficulty: number
@@ -492,9 +503,9 @@ export interface ContestProblemBrief {
 }
 
 export interface MessageBelong {
-  id: number
+  id: string
   title: string
-  userId: number
+  userId: string
   createTime: string
 }
 

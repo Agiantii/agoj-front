@@ -13,9 +13,9 @@ import { useToast } from "@/components/ui/use-toast"
 import Link from "next/link"
 
 interface SolutionDetail {
-  id: number
-  problemId: number
-  userId: number
+  id: string
+  problemId: string
+  userId: string
   title: string
   content: string
   createTime: string
@@ -27,7 +27,7 @@ interface SolutionDetail {
 }
 
 interface Problem {
-  id: number
+  id: string
   title: string
   difficulty: number
 }
@@ -36,7 +36,7 @@ export default function SolutionDetailPage() {
   const router = useRouter()
   const params = useParams()
   const { toast } = useToast()
-  const solutionId = parseInt(params.id as string)
+  const solutionId = params.id as string
   
   const [solution, setSolution] = useState<SolutionDetail | null>(null)
   const [problem, setProblem] = useState<Problem | null>(null)

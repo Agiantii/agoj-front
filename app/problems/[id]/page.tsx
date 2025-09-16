@@ -59,7 +59,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
   useEffect(() => {
     const fetchProblemDetail = async () => {
       try {
-        const res = await getProblemDetail(parseInt(params.id))
+        const res = await getProblemDetail(params.id)
         setProblem(res.data)
         // 设置默认代码模板（若编辑器已挂载则直接写入）
         const template = "#include <iostream>\nusing namespace std;\nint main()\n{\n return 0;\n }"
@@ -83,7 +83,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
 
   const fetchSolutions = async () => {
     try {
-      const solutionsRes = await getSolutionsByProblemId(parseInt(params.id), 1, 10)
+      const solutionsRes = await getSolutionsByProblemId(params.id, 1, 10)
       setSolutions(solutionsRes.data || [])
       setSolutionsLoaded(true)
     } catch (error: any) {
@@ -257,7 +257,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
       const { id: userId } = JSON.parse(userInfo)
 
       const res = await submitProblem({
-        problemId: parseInt(params.id),
+        problemId: params.id,
         userId,
         language,
         code,
@@ -305,8 +305,8 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
       }
 
       const res = await submitProblem({
-        problemId: parseInt(params.id),
-        userId: parseInt(userId),
+        problemId: params.id,
+        userId: userId,
         language,
         code,
         status: "PENDING", // 正式提交
@@ -482,14 +482,14 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                                 const { id: userId } = JSON.parse(userInfo)
 
                                 await addSolution({
-                                  problemId: parseInt(params.id),
-                                  userId,
+                                  problemId: params.id,
+                                  userId: userId,
                                   title: solutionTitle,
                                   content: solutionContent,
                                 })
 
                                 // 刷新题解列表
-                                const solutionsRes = await getSolutionsByProblemId(parseInt(params.id), 1, 10)
+                                const solutionsRes = await getSolutionsByProblemId(params.id, 1, 10)
                                 setSolutions(solutionsRes.data || [])
 
                                 // 清空输入

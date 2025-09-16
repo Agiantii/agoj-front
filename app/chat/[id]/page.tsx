@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { MessageCircle, Send, Plus, Trash2, Bot, User, ArrowLeft, RotateCcw, Square } from "lucide-react"
+import { MessageCircle, Send, Plus, Trash2, Bot, User, ArrowLeft, RotateCcw, Square, Edit2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
-import { newChat, getChatHistory, buildStreamChatMemoryUrl, getProblemDetail, getMessage, deleteChat } from "@/lib/api"
+import { newChat, getChatHistory, buildStreamChatMemoryUrl, getProblemDetail, getMessage, deleteChat, updateChatTitle, getApiBase } from "@/lib/api"
 import { useRouter, useSearchParams, useParams } from "next/navigation"
 
 interface Message {
@@ -55,6 +55,8 @@ export default function ChatIdPage() {
   const [inputMessage, setInputMessage] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState("")
   const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -155,7 +157,7 @@ export default function ChatIdPage() {
       router.push(`/chat/${newSession.id}`)
       return newSession.id
     } catch (error) {
-      console.error("创建新会话失败:", error)
+      console.error("创建新会话失败:", error) 
     }
   }
 
@@ -178,8 +180,38 @@ export default function ChatIdPage() {
       }
     } catch (error) {
       console.error("删除会话失败:", error)
-      // 可以添加错误提示，例如使用 toast
     }
+  }
+
+  const startEditTitle = (sessionId: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingSessionId(sessionId)
+    setEditingTitle(currentTitle)
+  }
+
+  const saveTitle = async (sessionId: string) => {
+    try {
+      await updateChatTitle({ messageId: sessionId, title: editingTitle })
+      
+      // 更新本地状态
+      setSessions((prev) => 
+        prev.map((session) => 
+          session.id === sessionId 
+            ? { ...session, title: editingTitle }
+            : session
+        )
+      )
+      
+      setEditingSessionId(null)
+      setEditingTitle("")
+    } catch (error) {
+      console.error("修改标题失败:", error)
+    }
+  }
+
+  const cancelEdit = () => {
+    setEditingSessionId(null)
+    setEditingTitle("")
   }
 
   // 停止流式输出
@@ -215,19 +247,19 @@ export default function ChatIdPage() {
       if (!sessionId) return
     }
 
-    // 获取问题描述
-    let description = ""
-    if (problemId) {
-      // 使用从问题详情页面复制的 getProblemDetail 函数
-      const problemData = await fetchProblemDetail(parseInt(problemId))
-      if (problemData) {
-        const details = problemData || ""
+    // // 获取问题描述
+    // let description = ""
+    // if (problemId) {
+    //   // 使用从问题详情页面复制的 getProblemDetail 函数
+    //   const problemData = await fetchProblemDetail(parseInt(problemId))
+    //   if (problemData) {
+    //     const details = problemData || ""
 
-        console.log("问题描述details:", details)  
-        message =  `${message} 问题描述:${problemData.description} 输入样例:${problemData.testInput} 输出样例:${problemData.testOutput}`
+    //     console.log("问题描述details:", details)  
+    //     message =  `${message} 问题描述:${problemData.description} 输入样例:${problemData.testInput} 输出样例:${problemData.testOutput}`
         
-      }
-    }
+    //   }
+    // }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -258,7 +290,10 @@ export default function ChatIdPage() {
     abortControllerRef.current = controller
     
     // 直接使用完整的API地址，避免中文编码问题
-    const url = new URL("http://localhost:9090/api/chat/stream/memory")
+    // const url = new URL("http://localhost:9090/api/chat/stream/memory")
+    const url_api = `${getApiBase()}/chat/stream/memory`
+    console.log(url_api)
+    const url = new URL(url_api)
     url.searchParams.set("query", message)
     url.searchParams.set("messageId", sessionId)
     if (problemId) {
@@ -377,25 +412,76 @@ export default function ChatIdPage() {
                     currentSessionId === session.id ? "bg-gray-800 border border-gray-700" : "hover:bg-gray-800"
                   }`}
                   onClick={() => {
-                    router.push(`/chat/${session.id}`)
+                    if (editingSessionId !== session.id) {
+                      router.push(`/chat/${session.id}`)
+                    }
                   }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-gray-200 truncate">{session.title}</h3>
-                      <p className="text-xs text-gray-400 mt-1">{session.messages.length} 条消息</p>
+                      {editingSessionId === session.id ? (
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            className="text-sm font-medium bg-gray-700 text-gray-200 px-2 py-1 rounded flex-1"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                saveTitle(session.id)
+                              } else if (e.key === 'Escape') {
+                                cancelEdit()
+                              }
+                            }}
+                            autoFocus
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => saveTitle(session.id)}
+                            className="text-green-400 hover:text-green-300 p-1"
+                          >
+                            ✓
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={cancelEdit}
+                            className="text-red-400 hover:text-red-300 p-1"
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <h3 className="text-sm font-medium text-gray-200 truncate">{session.title}</h3>
+                          <p className="text-xs text-gray-400 mt-1">{session.messages.length} 条消息</p>
+                        </>
+                      )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteSession(session.id)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {editingSessionId !== session.id && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => startEditTitle(session.id, session.title, e)}
+                          className="text-blue-400 hover:text-blue-300 p-1"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteSession(session.id)
+                          }}
+                          className="text-red-400 hover:text-red-300 p-1"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

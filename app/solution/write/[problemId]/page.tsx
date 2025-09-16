@@ -17,7 +17,7 @@ export default function WriteSolutionPage() {
   const router = useRouter()
   const params = useParams()
   const { toast } = useToast()
-  const problemId = parseInt(params.problemId as string)
+  const problemId = params.problemId as string
   
   const [problem, setProblem] = useState<any>(null)
   const [title, setTitle] = useState("")
@@ -158,7 +158,7 @@ export default function WriteSolutionPage() {
 
       await addSolution({
         problemId,
-        userId: parseInt(userId),
+        userId: userId,
         title: title.trim(),
         content: content.trim(),
       })

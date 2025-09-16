@@ -5,8 +5,8 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { MessageCircle, Plus, Trash2, Send } from "lucide-react"
-import { newChat, getChatHistory } from "@/lib/api"
+import { MessageCircle, Plus, Trash2, Send, Edit2 } from "lucide-react"
+import { newChat, getChatHistory, deleteChat, updateChatTitle } from "@/lib/api"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkMath from "remark-math"
@@ -25,6 +25,8 @@ export default function ChatPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [inputMessage, setInputMessage] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState("")
   const userIdRef = useRef<number | null>(null)
 
   // 初始化加载会话列表
@@ -67,8 +69,46 @@ export default function ChatPage() {
 
   const deleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId))
-    // TODO: 调用删除接口
+    try {
+      // 调用后端删除接口
+      await deleteChat(sessionId)
+      
+      // 删除成功后更新本地状态
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+    } catch (error) {
+      console.error("删除会话失败:", error)
+    }
+  }
+
+  const startEditTitle = (sessionId: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingSessionId(sessionId)
+    setEditingTitle(currentTitle)
+  }
+
+  const saveTitle = async (sessionId: string) => {
+    try {
+      await updateChatTitle({ messageId: sessionId, title: editingTitle })
+      
+      // 更新本地状态
+      setSessions((prev) => 
+        prev.map((session) => 
+          session.id === sessionId 
+            ? { ...session, title: editingTitle }
+            : session
+        )
+      )
+      
+      setEditingSessionId(null)
+      setEditingTitle("")
+    } catch (error) {
+      console.error("修改标题失败:", error)
+    }
+  }
+
+  const cancelEdit = () => {
+    setEditingSessionId(null)
+    setEditingTitle("")
   }
 
   const startQuickChat = async () => {
@@ -114,24 +154,75 @@ export default function ChatPage() {
                   key={session.id}
                   className="p-3 rounded-lg cursor-pointer transition-colors group hover:bg-gray-800"
                   onClick={() => {
-                    router.push(`/chat/${session.id}`)
+                    if (editingSessionId !== session.id) {
+                      router.push(`/chat/${session.id}`)
+                    }
                   }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-gray-200 truncate">{session.title}</h3>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {session.createdAt.toLocaleDateString()}
-                      </p>
+                      {editingSessionId === session.id ? (
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            className="text-sm font-medium bg-gray-700 text-gray-200 px-2 py-1 rounded flex-1"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                saveTitle(session.id)
+                              } else if (e.key === 'Escape') {
+                                cancelEdit()
+                              }
+                            }}
+                            autoFocus
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => saveTitle(session.id)}
+                            className="text-green-400 hover:text-green-300 p-1"
+                          >
+                            ✓
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={cancelEdit}
+                            className="text-red-400 hover:text-red-300 p-1"
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <h3 className="text-sm font-medium text-gray-200 truncate">{session.title}</h3>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {session.createdAt.toLocaleDateString()}
+                          </p>
+                        </>
+                      )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => deleteSession(session.id, e)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {editingSessionId !== session.id && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => startEditTitle(session.id, session.title, e)}
+                          className="text-blue-400 hover:text-blue-300 p-1"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => deleteSession(session.id, e)}
+                          className="text-red-400 hover:text-red-300 p-1"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
