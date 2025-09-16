@@ -1,7 +1,7 @@
 import axios from "axios"
 import JSONbig from 'json-bigint';
-const api_baseURL =  "http://localhost:9090/api"
-// const api_baseURL = process.env.NEXT_PUBLIC_API_BASE || "http://bc.agiantii.top:9090/api"
+// const api_baseURL =  "http://localhost:9090/api"
+const api_baseURL = process.env.NEXT_PUBLIC_API_BASE || "http://bc.agiantii.top:9090/api"
 // 创建axios实例
 const request = axios.create({
   baseURL: api_baseURL,
@@ -18,7 +18,7 @@ request.interceptors.request.use(
     }
 
     // 从localStorage获取userId
-    const userInfo = localStorage.getItem("userInfo")
+  const userInfo = localStorage.getItem("userInfo")
     if (userInfo) {
       const { id } = JSON.parse(userInfo)
       // 如果是需要userId的接口，自动添加

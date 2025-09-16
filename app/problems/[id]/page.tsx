@@ -47,7 +47,8 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
   const adviceAbortRef = useRef<AbortController | null>(null)
   const codeSyncTimerRef = useRef<any>(null)
   const initialCodeRef = useRef<string>("")
-
+ // 设置默认代码模板（若编辑器已挂载则直接写入）
+        const template = "#include <iostream>\nusing namespace std;\nint main()\n{\n int a,b;\n cin>>a>>b;\n cout<<a+b;\n return 0;\n }"
   // const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false }) as any
   const editorOptions = useMemo(() => ({
     fontSize: 14,
@@ -61,8 +62,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
       try {
         const res = await getProblemDetail(params.id)
         setProblem(res.data)
-        // 设置默认代码模板（若编辑器已挂载则直接写入）
-        const template = "#include <iostream>\nusing namespace std;\nint main()\n{\n return 0;\n }"
+       
         if (!initialCodeRef.current) {
           initialCodeRef.current = template
         }
@@ -475,12 +475,10 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                             className="w-full bg-green-600 hover:bg-green-700"
                             onClick={async () => {
                               try {
-                                const userInfo = localStorage.getItem("userInfo")
-                                if (!userInfo) {
+                                const userId = localStorage.getItem("userId")
+                                if(!userId){
                                   throw new Error("请先登录")
                                 }
-                                const { id: userId } = JSON.parse(userInfo)
-
                                 await addSolution({
                                   problemId: params.id,
                                   userId: userId,
@@ -568,7 +566,7 @@ export default function ProblemDetailPage({ params }: { params: { id: string } }
                 </SelectContent>
               </Select>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="border-gray-600 bg-transparent">
+                <Button variant="outline" size="sm" className="border-gray-600 bg-transparent" onClick={() => setCode(template)}>
                   <RotateCcw className="h-4 w-4 mr-2" />
                   重置
                 </Button>
