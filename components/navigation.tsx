@@ -134,7 +134,7 @@ export default function Navigation() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
             <Code className="h-6 w-6 text-blue-400" />
-            <span className="text-xl font-bold text-gray-100">CodeChallenge</span>
+            <span className="text-xl font-bold text-gray-100">AGOJ</span>
           </Link>
 
           {/* Navigation Links */}

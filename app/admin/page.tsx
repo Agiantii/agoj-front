@@ -38,7 +38,7 @@ export default function AdminPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-100">管理面板</h1>
           <p className="text-gray-400 mt-1">
-            欢迎使用 CodeChallenge 管理面板，在这里您可以管理题目和审核题解。
+            欢迎使用 AGOJ allenge 管理面板，在这里您可以管理题目和审核题解。
           </p>
         </div>
       </div>
